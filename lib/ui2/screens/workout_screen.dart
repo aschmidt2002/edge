@@ -51,7 +51,6 @@ import '../theme.dart';
 import '../../data/day_label.dart' show calendarDaysBetween;
 import 'log_workout.dart';
 import 'metric_detail.dart' show MetricDetail, detailLinkRow;
-import 'nutrition_screen.dart';
 import 'start_card.dart';
 
 class WorkoutScreen extends StatefulWidget {
@@ -205,24 +204,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
       // Steps and food, which used to be a Home tile and a tab of their own.
       // Doors, not cards: the numbers live one tap down.
       Section(
-        loc?.activityStepsFoodTitle ?? 'Steps and food',
-        Column(children: [
-          detailLinkRow(
-              c,
-              LucideIcons.footprints,
-              loc?.homeSteps ?? 'Steps',
-              loc?.activityStepsSub ?? 'Today and every day before it',
-              () => Navigator.of(c).push(MaterialPageRoute<void>(
-                  builder: (_) => const MetricDetail('steps')))),
-          const SizedBox(height: S.x3),
-          detailLinkRow(
-              c,
-              LucideIcons.utensils,
-              loc?.nutritionTitle ?? 'Nutrition',
-              loc?.activityNutritionSub ?? 'Log food and see today\'s protein',
-              () => Navigator.of(c).push(MaterialPageRoute<void>(
-                  builder: (_) => const NutritionScreen(page: true)))),
-        ]),
+        loc?.homeSteps ?? 'Steps',
+        detailLinkRow(
+            c,
+            LucideIcons.footprints,
+            loc?.homeSteps ?? 'Steps',
+            loc?.activityStepsSub ?? 'Today and every day before it',
+            () => Navigator.of(c).push(MaterialPageRoute<void>(
+                builder: (_) => const MetricDetail('steps')))),
       ),
       Section(
         loc?.workoutThisWeek ?? 'This week',

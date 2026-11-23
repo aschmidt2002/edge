@@ -23,7 +23,9 @@ enum ShellDomain {
   today('Today', LucideIcons.house, C.domHome),
   sleep('Sleep', LucideIcons.moon, C.domSleep),
   activity('Activity', LucideIcons.dumbbell, C.domMove),
-  health('Health', LucideIcons.heartPulse, C.domHealth);
+  health('Health', LucideIcons.heartPulse, C.domHealth),
+  // Edge+: Nutrition as its own tab, last so saved tab indices keep working.
+  nutrition('Nutrition', LucideIcons.utensils, C.domFood);
 
   const ShellDomain(this.label, this.icon, this.accent);
 
@@ -39,6 +41,7 @@ enum ShellDomain {
           ShellDomain.sleep => l?.tabSleep,
           ShellDomain.activity => l?.tabActivity,
           ShellDomain.health => l?.tabHealth,
+          ShellDomain.nutrition => l?.nutritionTitle,
         } ??
         label;
   }

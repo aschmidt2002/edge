@@ -36,8 +36,6 @@ import 'package:openstrap_edge/ui2/screens/detected_activities.dart'
     show DetectedActivitiesScreen;
 import 'package:openstrap_edge/ui2/profile/devices.dart';
 import 'package:openstrap_edge/ui2/profile/profile.dart';
-import 'package:openstrap_edge/ui2/screens/nutrition_screen.dart'
-    show NutritionScreen;
 import 'package:openstrap_edge/ui2/ui2.dart';
 
 /// A viewport tall enough that nothing under test is below the fold. The
@@ -161,17 +159,15 @@ void main() {
         kRouteMeds: ShellDomain.health,
         kRouteWorkoutSuggestion: ShellDomain.today,
         kRouteDetectedActivities: ShellDomain.activity,
-        kRouteWater: ShellDomain.activity,
+        kRouteWater: ShellDomain.nutrition,
         kRouteWorkoutIdle: ShellDomain.activity,
         kRouteAlarm: ShellDomain.sleep,
       };
       routes.forEach((route, domain) {
         expect(domainForRoute(route), domain, reason: route);
       });
-      // The hydration reminder says "tap to log a glass": Nutrition is a
-      // pushed page of Activity now, so the tap pushes it.
-      expect(screenForRoute(kRouteWater), isA<NutritionScreen>());
-      expect((screenForRoute(kRouteWater)! as NutritionScreen).page, isTrue);
+      // Edge+: Nutrition is its own tab, so the hydration reminder lands on it.
+      expect(screenForRoute(kRouteWater), isNull);
       expect(domainForRoute('/profile'), ShellDomain.today);
       expect(screenForRoute('/profile'), isA<ProfileHome>(),
           reason: 'the battery notification promises the band, not Today');

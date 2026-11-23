@@ -485,7 +485,7 @@ ShellDomain domainForRoute(String route) => switch (routePath(route)) {
         ShellDomain.health,
       // Water is a journal field logged beside food, and food is a section of
       // Activity.
-      kRouteWater => ShellDomain.activity,
+      kRouteWater => ShellDomain.nutrition,
       // The movement/sedentary nudges, recovery-ready and step-goal notes:
       // all about what is on Today.
       kRouteMovement ||
@@ -538,7 +538,6 @@ Widget? screenForRoute(String route) => switch (routePath(route)) {
       // The hydration reminder lands on the food log, where the water tile
       // carries its own − / + beside the food it belongs with. Nutrition is a
       // pushed page of Activity now, so it is pushed here too.
-      kRouteWater => const NutritionScreen(page: true),
       // The medication reminder lands on the checklist itself: Wellness is a
       // pushed page now, so the sub-tab is a constructor argument.
       kRouteMeds => const WellnessScreen(initialTab: WellnessScreen.medsTab),
@@ -712,6 +711,7 @@ class _ShellState extends State<AppMainShell> implements GuideShellLink {
         ShellDomain.sleep => const SleepTab(),
         ShellDomain.activity => const WorkoutScreen(),
         ShellDomain.health => const HealthScreen(),
+        ShellDomain.nutrition => const NutritionScreen(),
       },
     );
   }

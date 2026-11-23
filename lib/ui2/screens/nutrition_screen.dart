@@ -29,6 +29,7 @@ import '../ui2.dart';
 import '../onboarding/profile_setup.dart' show formatDay;
 import 'journal_compose.dart' show OsTextField;
 import 'log_food.dart';
+import '../profile/profile.dart' show ProfileAvatar;
 
 class NutritionScreen extends StatefulWidget {
   /// Pushed from the Activity tab rather than shown as a tab: a page with a
@@ -260,7 +261,12 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
       padding: EdgeInsets.fromLTRB(S.x4, widget.page ? 0 : S.x4, S.x4, S.x16),
       children: [
         if (!widget.page)
-          ScreenTitle(l?.nutritionTitle ?? 'Nutrition', trailing: logFood),
+          ScreenTitle(l?.nutritionTitle ?? 'Nutrition',
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                logFood,
+                const SizedBox(width: S.x3),
+                const ProfileAvatar(accent: C.domFood),
+              ])),
         SubTabs(_tabs(c), _tab, (i) => setState(() => _tab = i), color: C.domFood),
         const SizedBox(height: S.x5),
         if (_loading)
