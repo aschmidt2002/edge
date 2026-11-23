@@ -6,6 +6,7 @@
 #      A merge conflict stops the run with an error; resolve it locally.
 #   2. If the branch has a commit that has no Edge+ release yet, build a signed
 #      APK and publish it as a GitHub Release (tag like `0.12.3-plus.17`).
+#      A merge is pushed to the branch only after the APK built successfully.
 #
 # Secrets (Settings > Secrets and variables > Actions):
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
@@ -48,6 +49,7 @@ jobs:
           token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Merge the latest official upstream release
+        id: merge
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -69,13 +71,17 @@ jobs:
             git merge --abort
             exit 1
           fi
-          git push origin "HEAD:$BRANCH"
+          # Pushed only after the APK builds (see "Push merged branch" below),
+          # so a release that doesn't compile never lands in the branch.
+          echo "merged=true" >> "$GITHUB_OUTPUT"
 
       - name: Decide whether to release
         id: check
         run: |
           set -euo pipefail
-          if [ -n "$(git tag --points-at HEAD -l '*-plus.*')" ] && [ "${{ inputs.force }}" != "true" ]; then
+          if [ "${{ steps.merge.outputs.merged }}" != "true" ] \
+             && [ -n "$(git tag --points-at HEAD -l '*-plus.*')" ] \
+             && [ "${{ inputs.force }}" != "true" ]; then
             echo "This commit is already released. Nothing to do."
             echo "release=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -144,6 +150,10 @@ jobs:
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/edge-plus-${{ steps.check.outputs.vname }}.apk"
+
+      - name: Push merged branch
+        if: steps.merge.outputs.merged == 'true'
+        run: git push origin "HEAD:$BRANCH"
 
       - name: Publish release
         if: steps.check.outputs.release == 'true'
