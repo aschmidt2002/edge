@@ -52,6 +52,7 @@ import '../../data/day_label.dart' show calendarDaysBetween;
 import 'log_workout.dart';
 import 'metric_detail.dart' show MetricDetail, detailLinkRow;
 import 'start_card.dart';
+import 'training_plans_screen.dart' show TrainingPlansScreen;
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -243,6 +244,23 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
             ),
           ],
         ],
+      ),
+      // Edge+: training plans live under strength training.
+      Section(
+        Localizations.localeOf(c).languageCode == 'de'
+            ? 'Krafttraining'
+            : 'Strength training',
+        detailLinkRow(
+            c,
+            LucideIcons.dumbbell,
+            Localizations.localeOf(c).languageCode == 'de'
+                ? 'Trainingspläne'
+                : 'Training plans',
+            Localizations.localeOf(c).languageCode == 'de'
+                ? 'Plan starten und Fortschritt sehen'
+                : 'Start a plan and see your progress',
+            () => Navigator.of(c).push(MaterialPageRoute<void>(
+                builder: (_) => TrainingPlansScreen(weightKg: d.weightKg)))),
       ),
       // Steps and food, which used to be a Home tile and a tab of their own.
       // Doors, not cards: the numbers live one tap down.
