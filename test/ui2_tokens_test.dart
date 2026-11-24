@@ -199,6 +199,8 @@ const _notComponents = {
   'TabHeader', 'BandStatusIcon',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
+  // Edge+ training plans: Scaffold routes that read Prefs and the database.
+  'TrainingPlansScreen', 'TrainingPlanEditor', 'TrainingPlanProgress',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to

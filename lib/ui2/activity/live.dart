@@ -1673,6 +1673,17 @@ class _LiveStrengthState extends State<LiveStrength> {
             ],
           ]),
         ),
+        // Edge+: a training plan walks through its exercises in order.
+        if (index < plan.length - 1) ...[
+          const SizedBox(height: S.x3),
+          BigButton(
+              '${Localizations.localeOf(c).languageCode == 'de' ? 'Weiter' : 'Next'}: '
+              '${exerciseByKey(plan[index + 1])?.labelFor(Localizations.localeOf(c).languageCode) ?? plan[index + 1]}',
+              icon: LucideIcons.chevronRight,
+              color: C.purple,
+              soft: true,
+              onTap: () => goExercise(index + 1)),
+        ],
         const SizedBox(height: S.x5),
       ],
 
