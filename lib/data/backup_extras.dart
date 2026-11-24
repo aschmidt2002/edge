@@ -106,6 +106,8 @@ class ImportSummary extends MapView<String, int> {
 /// table complete. Keys in [kPrefsNotBackedUp] need no entry.
 const Map<String, String> kPrefTypes = {
   'edgeplus.training_plans': 'string', // Edge+: the user's training plans
+  'edgeplus.meal_plan.v1': 'string', // Edge+: the week's meal plan
+  'edgeplus.shopping_checked.v1': 'string', // Edge+: ticked shopping items
   // Edge+ experiments: JSON settings (goals, weekly plan, wake time).
   'xp.goals': 'string',
   'xp.weekplan': 'string',
