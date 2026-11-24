@@ -3156,11 +3156,11 @@ Widget healthDoor(BuildContext c, HomeData d) {
   final l = AppLocalizations.of(c);
   final (Color col, String sub) = switch (d.illnessState) {
     'red' => (C.red, tr(c, 'Ruhepuls mehrere Nächte erhöht',
-        'Resting heart rate up for several nights')),
+        'Resting heart rate raised lately')),
     'amber' => (C.orange, tr(c, 'Letzte Nacht außerhalb deines Normalbereichs',
-        'Last night outside your normal range')),
+        'A vital sign was off recently')),
     'green' => (C.green, tr(c, 'Alles in deinem Normalbereich',
-        'Everything in your normal range')),
+        'All vitals as usual')),
     _ => (C.domHealth, tr(c, 'Vitalwerte, Trends und Kopf',
         'Vitals, trends and mind')),
   };
