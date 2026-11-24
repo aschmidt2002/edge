@@ -13,6 +13,9 @@ import 'backup_support.dart';
 // must not silently change the expected export. Add new settings here by hand.
 const _mustTravel = {
   'edgeplus.training_plans', // Edge+
+  'edgeplus.meal_plan.v1', 'edgeplus.shopping_checked.v1', // Edge+
+  'activity.goals', 'plus.fast_start', 'plus.fast_goal_h', // Edge+
+  'plus.weather_lat', 'plus.weather_lon', // Edge+
   'theme_choice', 'locale_override', 'units_system', 'clock_format',
   'local_profile_json', 'onboarding_choice', 'onboard.completed',
   'onboard.skipped_pairing', 'onboard.saw_profile_setup',

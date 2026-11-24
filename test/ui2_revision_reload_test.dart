@@ -15,7 +15,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -111,8 +110,8 @@ void main() {
     app.repo = repo;
 
     await t.pumpWidget(_app(app));
-    await _until(t, find.text('None yet'));
-    expect(find.text('None yet'), findsOneWidget);
+    await _until(t, find.text('0.0 L'));
+    expect(find.text('0.0 L'), findsOneWidget);
 
     // The screen that is about to be asked to notice.
     final before = t.state(find.byType(NutritionScreen));
@@ -143,7 +142,7 @@ void main() {
     app.repo = repo;
 
     await t.pumpWidget(_app(app));
-    await _until(t, find.text('None yet'));
+    await _until(t, find.text('0.0 L'));
     final first = repo.reads;
     expect(first, greaterThan(0));
 
@@ -171,7 +170,7 @@ void main() {
     addTearDown(locale.dispose);
 
     await t.pumpWidget(_app(app, locale: locale));
-    await _until(t, find.text('None yet'));
+    await _until(t, find.text('0.0 L'));
     final before = t.state(find.byType(NutritionScreen));
     final reads = repo.reads;
     expect(reads, greaterThan(0));
@@ -254,7 +253,7 @@ void main() {
     // Midnight passes with the tab open and nothing bumps it: the tile still
     // holds yesterday's 2.0 L, but today has nothing stored yet.
     repo.journal = const {};
-    await t.tap(find.byIcon(LucideIcons.plus).last);
+    await t.tap(find.bySemanticsLabel('Add water'));
     for (var i = 0; i < 20 && repo.posted == null; i++) {
       await t.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)));

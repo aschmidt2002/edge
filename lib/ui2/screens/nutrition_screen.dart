@@ -33,6 +33,9 @@ import 'fasting.dart';
 import 'nutrition_plus.dart';
 import '../profile/profile.dart' show ProfileAvatar, SetRow;
 import 'food_ai_key_sheet.dart';
+import 'recipes_screen.dart';
+import '../../data/meal_plan_store.dart';
+import '../../data/recipes.dart' show recipeById;
 
 class NutritionScreen extends StatefulWidget {
   /// Pushed from the Activity tab rather than shown as a tab: a page with a
@@ -46,20 +49,28 @@ class NutritionScreen extends StatefulWidget {
 }
 
 class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
+  /// Edge+: 0 is the day view under the week calendar, 1 History (the old
+  /// Week tab), 2 Goals.
   int _tab = 0;
-  static List<String> _tabs(BuildContext c) {
-    final l = AppLocalizations.of(c);
-    return [
-      l?.nutritionTabToday ?? 'Today',
-      l?.nutritionTabWeek ?? 'Week',
-      l?.nutritionTabGoals ?? 'Goals',
-    ];
-  }
 
   /// Read on every use, never captured once: the shell keeps this tab alive in
   /// its IndexedStack, so a field initialiser would still be yesterday after
   /// midnight and an occasion logged at 00:05 would land on the wrong day.
   String get _date => todayLabel();
+
+  /// Edge+: the day picked in the week calendar. Null follows today, so a
+  /// tab left open past midnight moves on with the clock.
+  String? _picked;
+  String get _day => _picked ?? _date;
+  bool get _isToday => _day == _date;
+  bool get _isFuture => _day.compareTo(_date) > 0;
+
+  /// Weeks away from the current one in the calendar.
+  int _weekOffset = 0;
+
+  /// Entries for the seven days of the calendar week on screen.
+  Map<String, List<FoodEntry>> _weekEntries = const {};
+
   NutritionWindow? _week;
   Metric? _burned;
 
@@ -69,6 +80,7 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
   Map<String, double> _burnedByDate = const {};
   Map<String, double> _wornMinByDate = const {};
   double? _waterMl;
+  double? _caffeineMg;
   /// The day [_waterMl] was read for. Past midnight on a tab nobody reloaded
   /// it is still yesterday's, and a full yesterday disabled today's + button.
   String? _waterDate;
@@ -92,11 +104,28 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
   @override
   void reload() => _load();
 
+  /// Monday of the calendar week on screen.
+  DateTime get _monday {
+    final now = DateTime.now();
+    final d = DateTime(now.year, now.month, now.day + 7 * _weekOffset);
+    return DateTime(d.year, d.month, d.day - (d.weekday - 1));
+  }
+
+  List<String> get _weekDays => [
+        for (var i = 0; i < 7; i++)
+          dayLabelOf(DateTime(_monday.year, _monday.month, _monday.day + i)),
+      ];
+
   Future<void> _load() async {
     final t = beginRead(#nutrition);
     final app = context.read<AppState>();
     final db = await LocalDb.instance;
     final week = await NutritionDb.window(db, days: 7);
+    final days = _weekDays;
+    final since = await NutritionDb.entriesSince(db, days.first);
+    final weekEntries = {
+      for (final d in days) d: since[d] ?? const <FoodEntry>[],
+    };
     final weekDates = {for (final d in week.days) d.date};
     // Measured days only: an imported vendor total is a different estimate,
     // and averaging it with ours mixes two scales in one figure.
@@ -109,28 +138,36 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
         await LocalDb.metricSeries('calories_total', measuredOnly: true));
     final wornMinByDate = weekOf(await LocalDb.metricSeries('worn_min'));
     Metric? burned;
-    double? water;
+    double? water, caffeine;
     final date = _date;
     final repo = app.repo;
     if (repo != null) {
       final today = await repo.getToday();
       final daily = today['daily'];
       if (daily is Map) burned = Metric.parse(daily['calories_total']);
-      water = (await repo.getJournalMetrics(date))['water_ml']?.value;
+      final j = await repo.getJournalMetrics(date);
+      water = j['water_ml']?.value;
+      caffeine = j['caffeine_mg']?.value;
     }
     if (!stillNewest(#nutrition, t)) return;
     setState(() {
       _week = week;
+      _weekEntries = weekEntries;
       _burned = burned;
       _burnedByDate = burnedByDate;
       _wornMinByDate = wornMinByDate;
       _waterMl = water;
+      _caffeineMg = caffeine;
       _waterDate = date;
       _profile = {...?app.user};
       _loading = false;
     });
     ensureCreatineReminder(_profile);
   }
+
+  /// The picked day, rolled up. Read from the calendar week's entries.
+  NutritionDay get _dayRollup => rollupDay(
+      _day, _weekEntries[_day] ?? const [], today: _date);
 
   NutritionDay? get _today {
     final w = _week;
@@ -141,70 +178,127 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
     return null;
   }
 
+  /// The + on a meal. A future day plans; today and earlier log, and the log
+  /// sheet's recipe row can plan today too.
   Future<void> _logFood({String meal = 'snack'}) async {
-    final ok = await LogFoodSheet.show(context, date: _date, meal: meal);
+    if (_isFuture) {
+      final pick =
+          await RecipePickerPage.open(context, meal: meal, canEat: false);
+      if (pick == null) return;
+      MealPlanStore.add(_day, pick.toPlanned(meal));
+      await _load();
+      return;
+    }
+    final ok = await LogFoodSheet.show(context, date: _day, meal: meal);
     if (ok == true) await _load();
   }
 
-  /// One tap's worth of water, from the field spec that performs the tap.
-  static JournalFieldSpec get _waterSpec => kJournalFieldsByKey['water_ml']!;
+  /// A planned meal: its recipe page, or for a meal planned by name a small
+  /// sheet. Either can log it as eaten or take it out of the plan.
+  Future<void> _openPlanned(PlannedMeal m) async {
+    final day = _day;
+    final canEat = !_isFuture;
+    final r = recipeById(m.recipeId);
+    bool? eat;
+    if (r != null) {
+      final pick = await RecipeDetailPage.open(context, r,
+          servings: m.servings, canEat: canEat, canPlan: false, planned: true);
+      if (pick == null) return;
+      eat = pick.eat ? true : (pick.remove ? false : null);
+    } else {
+      eat = await showModalBottomSheet<bool>(
+        context: context,
+        sheetAnimationStyle: sheetMotion(context),
+        backgroundColor: P.of(context).card,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(R.xxl)),
+        ),
+        builder: (s) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(S.x5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(m.name, style: F.head.copyWith(color: P.of(s).ink)),
+                const SizedBox(height: S.x4),
+                if (canEat) ...[
+                  BigButton(tr(s, 'Gegessen', 'Eaten'),
+                      icon: LucideIcons.check,
+                      color: C.domFood,
+                      onTap: () => Navigator.of(s).pop(true)),
+                  const SizedBox(height: S.x3),
+                ],
+                BigButton(tr(s, 'Aus dem Plan entfernen', 'Remove from the plan'),
+                    icon: LucideIcons.trash2,
+                    color: C.domFood,
+                    soft: true,
+                    onTap: () => Navigator.of(s).pop(false)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (eat == null) return;
+    if (eat) {
+      await eatPlanned(day, m);
+    } else {
+      MealPlanStore.remove(day, m.id);
+    }
+    if (mounted) await _load();
+  }
 
-  /// Step the day's water up or down, in place.
-  ///
-  /// This row used to be add-only: every tap wrote `+250 ml` and nothing on the
-  /// screen could take one back. Same ladder as the journal's own stepper — a
-  /// step down off the last glass lands on a logged ZERO ("none today"), and a
-  /// step down from zero clears the field, because absence and zero are
-  /// different answers.
-  /// One write at a time. `_stepWater` reads the day, then awaits, then writes
+  /// One write at a time. `_stepDose` reads the day, then awaits, then writes
   /// it back — and `postJournalMetrics` replaces the whole day — so two taps
   /// during that await both read the same map and the second write silently
   /// eats the first tap. Same guard the wellness screen already uses for its
   /// journal fields.
   bool _writingWater = false;
 
-  Future<void> _stepWater(int dir) async {
+  /// Caffeine per cup of coffee, the step of the coffee row. A typical cup of
+  /// filter coffee; stored as `caffeine_mg` so sleep insights see it.
+  static const double kCaffeinePerCup = 80;
+
+  /// Step a journal dose (water or coffee) for today up or down, in place.
+  ///
+  /// A step down off the last unit lands on a logged ZERO ("none today"), and
+  /// a step down from zero clears the field, because absence and zero are
+  /// different answers.
+  Future<void> _stepDose(String key, double step, int dir) async {
     final repo = context.read<AppState>().repo;
     if (repo == null || _writingWater) return;
     _writingWater = true;
     try {
-      // Inside the try, not before it: the READ can throw too, and with the
-      // guard already set that left both buttons dead until the screen was
-      // rebuilt — the flag outliving the operation it was protecting.
-      //
-      // Step from what is stored for today, not from `_waterMl`: that is the
-      // last load's figure, and on a tab left open past midnight it is still
-      // yesterday's total, so the first tap wrote yesterday + 250 ml to today.
+      // Step from what is stored for today, not from the last load's figure:
+      // on a tab left open past midnight that is still yesterday's total.
       //
       // Drop the key rather than omitting it from a spread: `putJournalMetrics`
-      // clears the day and re-inserts what it is handed, so leaving `water_ml`
-      // out is what "no answer today" looks like on disk — and spreading the
-      // old map back in is exactly what made this un-clearable.
+      // clears the day and re-inserts what it is handed, so leaving the key
+      // out is what "no answer today" looks like on disk.
       final date = _date;
-      final spec = _waterSpec;
-      double? next;
+      final max = kJournalFieldsByKey[key]!.max;
+      final now = DateTime.now();
       await repo.editJournalMetrics(date, (fields) {
-        final v = fields.remove('water_ml')?.value;
+        final old = fields.remove(key);
+        final v = old?.value;
+        double? next;
         if (dir > 0) {
-          next = ((v ?? 0) + spec.step).clamp(0, spec.max).toDouble();
+          next = ((v ?? 0) + step).clamp(0, max).toDouble();
         } else {
-          final down = (v ?? 0) - spec.step;
+          final down = (v ?? 0) - step;
           next = down <= 0 ? (v == null || v == 0 ? null : 0.0) : down;
         }
-        final n = next;
-        if (n != null) fields['water_ml'] = JournalMetricValue(n);
+        if (next != null) {
+          fields[key] = JournalMetricValue(next,
+              atMinuteOfDay: kJournalFieldsByKey[key]!.hasTime
+                  ? (dir > 0 ? now.hour * 60 + now.minute : old?.atMinuteOfDay)
+                  : null);
+        }
       });
-      if (mounted) {
-        setState(() {
-          _waterMl = next;
-          _waterDate = date;
-        });
-      }
       await _load();
     } finally {
-      // Cleared unconditionally; the setState is only for the repaint. Gating
-      // the assignment on `mounted` would strand it again on the path where
-      // the screen goes away mid-write.
+      // Cleared unconditionally; the setState is only for the repaint.
       _writingWater = false;
       if (mounted) setState(() {});
     }
@@ -252,32 +346,29 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
   @override
   Widget build(BuildContext c) {
     final l = AppLocalizations.of(c);
-    final logFood = Pressable(
-      semanticLabel: l?.nutritionLogFood ?? 'Log food',
-      onTap: _logFood,
-      child: Icon(
-        LucideIcons.circlePlus,
-        size: 22,
-        color: P.of(c).on(C.domFood),
+    final list = PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _tab = 0);
+      },
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(S.x4, widget.page ? 0 : S.x4, S.x4, S.x16),
+        children: [
+          if (!widget.page)
+            ScreenTitle(l?.nutritionTitle ?? 'Nutrition',
+                trailing: const ProfileAvatar(accent: C.domFood)),
+          if (_tab != 0)
+            _backHeader(
+                c,
+                _tab == 1
+                    ? tr(c, 'Verlauf', 'History')
+                    : tr(c, 'Ziele', 'Goals')),
+          if (_loading)
+            const Center(child: CircularProgressIndicator())
+          else
+            [_todayTab, _weekTab, _goalsTab][_tab](c),
+        ],
       ),
-    );
-    final list = ListView(
-      padding: EdgeInsets.fromLTRB(S.x4, widget.page ? 0 : S.x4, S.x4, S.x16),
-      children: [
-        if (!widget.page)
-          ScreenTitle(l?.nutritionTitle ?? 'Nutrition',
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                logFood,
-                const SizedBox(width: S.x3),
-                const ProfileAvatar(accent: C.domFood),
-              ])),
-        SubTabs(_tabs(c), _tab, (i) => setState(() => _tab = i), color: C.domFood),
-        const SizedBox(height: S.x5),
-        if (_loading)
-          const Center(child: CircularProgressIndicator())
-        else
-          [_todayTab, _weekTab, _goalsTab][_tab](c),
-      ],
     );
     if (!widget.page) return list;
     return Scaffold(
@@ -286,9 +377,26 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: S.x4),
-            child: NavBar(l?.nutritionTitle ?? 'Nutrition', trailing: logFood),
+            child: NavBar(l?.nutritionTitle ?? 'Nutrition'),
           ),
           Expanded(child: list),
+        ]),
+      ),
+    );
+  }
+
+  /// Back from History or Goals to the day view.
+  Widget _backHeader(BuildContext c, String title) {
+    final p = P.of(c);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: S.x4),
+      child: Pressable(
+        onTap: () => setState(() => _tab = 0),
+        semanticLabel: title,
+        child: Row(children: [
+          Icon(LucideIcons.chevronLeft, size: 20, color: p.ink2),
+          const SizedBox(width: S.x1),
+          Text(title, style: F.head.copyWith(color: p.ink)),
         ]),
       ),
     );
@@ -297,109 +405,234 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
   // ── TODAY ────────────────────────────────────────────────────────────────
 
   Widget _todayTab(BuildContext c) {
-    final l = AppLocalizations.of(c);
-    final day = _today;
-    final w = _week;
+    final p = P.of(c);
+    final day = _dayRollup;
+    final days = _weekDays;
+    final plans = {for (final d in days) d: MealPlanStore.forDay(d)};
+    double? sum(Iterable<double?> xs) {
+      final known = xs.whereType<double>();
+      return known.isEmpty ? null : known.reduce((a, b) => a + b);
+    }
+
+    final bars = <double?>[
+      for (final d in days)
+        (_weekEntries[d]?.isNotEmpty ?? false)
+            ? sum(_weekEntries[d]!.map((e) => e.kcal))
+            : sum(plans[d]!.map((m) => m.kcal)),
+    ];
+    final planned = plans[_day] ?? const <PlannedMeal>[];
+    Widget smallButton(IconData icon, String label, VoidCallback onTap) =>
+        Expanded(
+          child: Surface(
+            pad: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x3),
+            onTap: onTap,
+            semanticLabel: label,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, size: 17, color: p.on(C.domFood)),
+              const SizedBox(width: S.x2),
+              Flexible(
+                child: Text(label,
+                    style: F.body.copyWith(color: p.ink),
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ]),
+          ),
+        );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (day == null || !day.logged)
-          StatusCard(
-            l?.nutritionEmptyTodayTitle ?? 'Nothing logged today',
-            l?.nutritionEmptyTodayBody ?? 'One tap is a complete log.',
-            fix: l?.nutritionLogOccasionFix ?? 'Log an eating occasion',
-            icon: LucideIcons.utensils,
-            onFix: _logFood,
-          )
-        else
-          DayEnergyCard(day: day, burned: _burned),
-        if (_proteinToday(c, day) case final protein?) ...[
-          const SizedBox(height: S.x4),
-          protein,
-        ],
-        Section(
-          l?.nutritionOccasionsSection ?? 'Occasions',
-          Surface(
-            pad: const EdgeInsets.symmetric(horizontal: S.x4),
-            child: Column(
-              children: [
-                for (final m in kMeals) ...[
-                  MealRow(
-                    meal: m,
-                    entries: day?.mealEntries(m) ?? const [],
-                    onTap: () => _logFood(meal: m),
-                  ),
-                  // The individual entries, indented under the occasion they
-                  // belong to, each one editable and removable. A mistyped
-                  // 2,000 kcal used to be permanent and it silently poisoned
-                  // every seven-day mean it fell into.
-                  for (final e in day?.mealEntries(m) ?? const <FoodEntry>[])
-                    Padding(
-                      padding: const EdgeInsets.only(left: S.x8),
-                      child: FoodRow(
-                        entry: e,
-                        trailing: LucideIcons.pencil,
-                        onTap: () => _editFood(e),
-                      ),
-                    ),
-                ],
-              ],
+        IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(
+            child: Surface(
+              pad: const EdgeInsets.fromLTRB(S.x1, S.x3, S.x1, S.x3),
+              child: _WeekStrip(
+                days: days,
+                today: _date,
+                selected: _day,
+                bars: bars,
+                logged: {
+                  for (final d in days)
+                    if (_weekEntries[d]?.isNotEmpty ?? false) d,
+                },
+                onPick: (d) => setState(() => _picked = d == _date ? null : d),
+                onShift: (dir) {
+                  setState(() {
+                    _weekOffset += dir;
+                    _picked = _weekOffset == 0 ? null : _weekDays.first;
+                  });
+                  _load();
+                },
+              ),
             ),
           ),
-          action: l?.nutritionAddAction ?? 'Add',
-          onAction: _logFood,
-        ),
-        const SizedBox(height: S.x4),
-        // Gated on the repository too: with no repo `_stepWater` returns at
-        // its first line, so an enabled + button was a control that did
-        // nothing — worse than a disabled one, which at least says so.
-        Builder(builder: (bc) {
-          final live = bc.select<AppState, bool>((a) => a.repo != null) &&
-              !_writingWater;
-          final ml = _waterDate == _date ? _waterMl : null;
-          return _WaterRow(
-            ml: ml,
-            onDown: (!live || ml == null) ? null : () => _stepWater(-1),
-            onUp: (!live || (ml ?? 0) >= _waterSpec.max)
-                ? null
-                : () => _stepWater(1),
-          );
-        }),
-        const SizedBox(height: S.x3),
-        CreatineRow(
-          taken: creatineTakenToday(_profile),
-          onTap: () async {
-            await setCreatineTaken(c, !creatineTakenToday(_profile));
-            if (mounted) await _load();
-          },
-        ),
-        const SizedBox(height: S.x3),
-        const FastingCard(),
-        if (day != null && day.logged && day.kcal.isFloor) ...[
-          const SizedBox(height: S.x4),
-          StatusCard(
-            l?.nutritionFloorTitle ?? 'Today\'s energy is a floor, not a total',
-            l?.nutritionFloorBody(day.kcal.unknown, day.entries.length) ??
-                '${day.kcal.unknown} of ${day.entries.length} occasions were '
-                    'logged without an energy figure, so the number above is '
-                    'the least you ate rather than what you ate.',
-            fix: l?.nutritionAddNumbersFix ?? 'Add the numbers to an occasion',
-            icon: LucideIcons.circleDashed,
-            onFix: _logFood,
+          const SizedBox(width: S.x2),
+          Pressable(
+            onTap: () => setState(() => _tab = 1),
+            semanticLabel: tr(c, 'Verlauf', 'History'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: S.x3),
+              decoration: BoxDecoration(
+                  color: p.card, borderRadius: R.rLg, boxShadow: p.el(1)),
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.history, size: 20, color: p.ink2),
+                    const SizedBox(height: S.x1),
+                    Text(tr(c, 'Verlauf', 'History'),
+                        style: F.cap.copyWith(color: p.ink2)),
+                  ]),
+            ),
           ),
+        ])),
+        const SizedBox(height: S.x3),
+        Row(children: [
+          smallButton(LucideIcons.target, tr(c, 'Ziele', 'Goals'),
+              () => setState(() => _tab = 2)),
+          const SizedBox(width: S.x3),
+          smallButton(
+              LucideIcons.shoppingCart,
+              tr(c, 'Einkaufsliste', 'Shopping list'),
+              () => Navigator.of(c).push(MaterialPageRoute<void>(
+                  builder: (_) => ShoppingListPage(
+                      days: [for (final d in days) if (d.compareTo(_date) >= 0) d])))),
+        ]),
+        if (!_isFuture && day.logged) ...[
+          const SizedBox(height: S.x4),
+          DayEnergyCard(day: day, burned: _isToday ? _burned : null),
         ],
-        if (w != null && w.daysExcluded > 0) ...[
-          const SizedBox(height: S.x4),
-          Observation(
-            l?.nutritionDaysNotCounted(w.daysExcluded, w.span) ??
-                '${w.daysExcluded} of the last ${w.span} days could not be '
-                    'counted',
-            l?.nutritionDayCountsRule ??
-                'A day counts once every occasion carries an energy figure.',
+        if (_isToday)
+          if (_proteinToday(c, _today) case final protein?) ...[
+            const SizedBox(height: S.x4),
+            protein,
+          ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(S.x1, S.x5, 0, S.x2),
+          child: Row(children: [
+            Expanded(
+              child: Text(
+                  _isToday
+                      ? tr(c, 'Mahlzeiten', 'Meals')
+                      : _dayShort(_day, AppLocalizations.of(c)),
+                  style: F.head.copyWith(color: p.ink)),
+            ),
+            Pressable(
+              semanticLabel: AppLocalizations.of(c)?.nutritionLogFood ?? 'Log food',
+              onTap: () => _logFood(meal: _defaultMeal()),
+              child: Padding(
+                padding: const EdgeInsets.all(S.x1),
+                child: Icon(LucideIcons.plus, size: 22, color: p.on(C.domFood)),
+              ),
+            ),
+          ]),
+        ),
+        Surface(
+          pad: const EdgeInsets.symmetric(horizontal: S.x4),
+          child: Column(
+            children: [
+              for (final m in kMeals) ...[
+                MealRow(
+                  meal: m,
+                  entries: day.mealEntries(m),
+                  onTap: () => _logFood(meal: m),
+                ),
+                // The individual entries, indented under the occasion they
+                // belong to, each one editable and removable. A mistyped
+                // 2,000 kcal used to be permanent and it silently poisoned
+                // every seven-day mean it fell into.
+                for (final e in day.mealEntries(m))
+                  Padding(
+                    padding: const EdgeInsets.only(left: S.x8),
+                    child: FoodRow(
+                      entry: e,
+                      trailing: LucideIcons.pencil,
+                      onTap: () => _editFood(e),
+                    ),
+                  ),
+                for (final pm in planned.where((x) => x.meal == m))
+                  Padding(
+                    padding: const EdgeInsets.only(left: S.x8),
+                    child: _PlannedRow(pm, onTap: () => _openPlanned(pm)),
+                  ),
+              ],
+            ],
           ),
+        ),
+        if (_isToday) ...[
+          const SizedBox(height: S.x4),
+          // Gated on the repository too: with no repo `_stepDose` returns at
+          // its first line, so an enabled + button was a control that did
+          // nothing — worse than a disabled one, which at least says so.
+          Builder(builder: (bc) {
+            final live = bc.select<AppState, bool>((a) => a.repo != null) &&
+                !_writingWater;
+            final fresh = _waterDate == _date;
+            final ml = fresh ? _waterMl : null;
+            final mg = fresh ? _caffeineMg : null;
+            final waterStep = kJournalFieldsByKey['water_ml']!.step;
+            final cups = mg == null ? null : mg / kCaffeinePerCup;
+            return Row(children: [
+              Expanded(
+                child: _DoseTile(
+                  icon: LucideIcons.glassWater,
+                  color: C.blue,
+                  value: '${((ml ?? 0) / 1000).toStringAsFixed(1)} L',
+                  empty: ml == null,
+                  addLabel: AppLocalizations.of(c)?.nutritionAddWater ?? 'Add water',
+                  removeLabel:
+                      AppLocalizations.of(c)?.nutritionRemoveWater ?? 'Remove water',
+                  onDown: (!live || ml == null)
+                      ? null
+                      : () => _stepDose('water_ml', waterStep, -1),
+                  onUp: (!live || (ml ?? 0) >= kJournalFieldsByKey['water_ml']!.max)
+                      ? null
+                      : () => _stepDose('water_ml', waterStep, 1),
+                ),
+              ),
+              const SizedBox(width: S.x3),
+              Expanded(
+                child: _DoseTile(
+                  icon: LucideIcons.coffee,
+                  color: C.orange,
+                  value: cups == null
+                      ? '0'
+                      : (cups == cups.roundToDouble()
+                          ? cups.round().toString()
+                          : cups.toStringAsFixed(1).replaceAll('.', ',')),
+                  empty: mg == null,
+                  addLabel: tr(c, 'Tasse Kaffee hinzufügen', 'Add a cup of coffee'),
+                  removeLabel: tr(c, 'Tasse Kaffee entfernen', 'Remove a cup of coffee'),
+                  onDown: (!live || mg == null)
+                      ? null
+                      : () => _stepDose('caffeine_mg', kCaffeinePerCup, -1),
+                  onUp: (!live ||
+                          (mg ?? 0) >= kJournalFieldsByKey['caffeine_mg']!.max)
+                      ? null
+                      : () => _stepDose('caffeine_mg', kCaffeinePerCup, 1),
+                ),
+              ),
+            ]);
+          }),
+          const SizedBox(height: S.x3),
+          CreatineRow(
+            taken: creatineTakenToday(_profile),
+            onTap: () async {
+              await setCreatineTaken(c, !creatineTakenToday(_profile));
+              if (mounted) await _load();
+            },
+          ),
+          const SizedBox(height: S.x3),
+          const FastingCard(),
         ],
       ],
     );
+  }
+
+  /// The meal the header's + opens on, from the clock.
+  static String _defaultMeal() {
+    final h = DateTime.now().hour;
+    return h < 11 ? 'breakfast' : h < 15 ? 'lunch' : h < 18 ? 'snack' : 'dinner';
   }
 
   // ── WEEK ─────────────────────────────────────────────────────────────────
@@ -473,13 +706,6 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
                       C.teal,
                     ),
                   ]),
-                  const SizedBox(height: S.x3),
-                  Text(
-                    l?.nutritionEatenMeanNote(balance.days) ??
-                        'Eaten and burned are both means over the same '
-                            '${balance.days} complete days.',
-                    style: F.cap.copyWith(color: P.of(c).ink3, height: 1.45),
-                  ),
                 ],
               ),
             ),
@@ -638,7 +864,6 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
 
   Widget _goalsTab(BuildContext c) {
     final l = AppLocalizations.of(c);
-    final p = P.of(c);
     final specs = _goalSpecs(c);
     final set = [for (final g in specs) if (_target(g.$1) != null) g];
 
@@ -692,42 +917,7 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
             LucideIcons.camera,
             C.domFood,
             tr(c, 'KI für Essensfotos', 'AI for meal photos'),
-            sub: tr(c, 'Eigener API-Key', 'Your own API key'),
             onTap: () => editFoodAiKeys(c),
-          ),
-        ),
-        const SizedBox(height: S.x4),
-        Surface(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(LucideIcons.cpu, size: 16, color: p.on(C.purple)),
-                  const SizedBox(width: S.x2),
-                  Expanded(
-                    child: Text(
-                      l?.nutritionBodySpentToday ?? 'What your body spent today',
-                      style: F.body.copyWith(
-                        color: p.ink,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: S.x4),
-              MetricRow(
-                LucideIcons.flame,
-                C.purple,
-                l?.nutritionEstimatedExpenditure ?? 'Estimated expenditure',
-                _burned?.value == null
-                    ? (l?.nutritionNotMeasured ?? 'Not measured')
-                    : '${_burned!.value!.round()}',
-                unit: _burned?.value == null ? '' : 'kcal',
-                sub: l?.nutritionExpenditureSub ?? 'TODAY, FROM HEART RATE AND YOUR PROFILE',
-              ),
-            ],
           ),
         ),
       ],
@@ -961,26 +1151,17 @@ class MealRow extends StatelessWidget {
                     _mealLabel(c, meal),
                     style: F.body.copyWith(color: p.ink),
                   ),
-                  Text(
-                    entries.isEmpty
-                        ? (l?.nutritionNotLogged ?? 'Not logged')
-                        : total == null
-                        ? (l?.nutritionLoggedNoEnergy(entries.length) ??
-                            '${entries.length} logged · energy not recorded')
-                        : '${anyUnknown ? (l?.nutritionAtLeastPrefix ?? 'at least ') : ''}'
-                              '${total.round()} kcal',
-                    style: F.over.copyWith(color: p.ink3),
-                  ),
+                  // Edge+: no caption for an empty meal; the + says it.
+                  if (total != null)
+                    Text(
+                      '${anyUnknown ? (l?.nutritionAtLeastPrefix ?? 'at least ') : ''}'
+                          '${total.round()} kcal',
+                      style: F.over.copyWith(color: p.ink3),
+                    ),
                 ],
               ),
             ),
-            Icon(
-              entries.isEmpty
-                  ? LucideIcons.circlePlus
-                  : LucideIcons.circleCheck,
-              size: 20,
-              color: entries.isEmpty ? p.ink3 : p.on(C.green),
-            ),
+            Icon(LucideIcons.plus, size: 20, color: p.ink3),
           ],
         ),
       ),
@@ -1017,7 +1198,6 @@ class _Mean extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     final l = AppLocalizations.of(c);
-    final n = mean.days;
     final floors = mean.floorDays;
     return MetricRow(
       LucideIcons.chartNoAxesColumn,
@@ -1029,106 +1209,211 @@ class _Mean extends StatelessWidget {
               : (l?.nutritionNotRecorded ?? 'Not recorded'))
           : mean.value!.round().toString(),
       unit: mean.value == null ? '' : unit,
-      sub: mean.value == null
-          ? (floors > 0
-                ? (l?.nutritionEveryDayNoFigure(label.toUpperCase()) ??
-                    'EVERY COMPLETE DAY HAD AN OCCASION WITH NO '
-                        '${label.toUpperCase()} FIGURE')
-                : (l?.nutritionNoDayRecorded(label.toUpperCase()) ??
-                    'NO COMPLETE DAY RECORDED ${label.toUpperCase()}'))
-          : (l?.nutritionMeanOfCompleteDaysCaps(n) ??
-                  'MEAN OF $n COMPLETE DAY${n == 1 ? '' : 'S'}') +
-              (floors == 0
-                  ? ''
-                  : (l?.nutritionLeftOutAsFloor(floors) ??
-                      ' · $floors LEFT OUT AS A FLOOR')),
+      sub: '',
     );
   }
 }
 
-/// Water, with the plus and minus ON the tile — `− 1.8 L +`.
-///
-/// A separate widget only because the shared [MetricRow] carries one tap for
-/// the whole row, and water needs two targets pointing opposite ways. Nothing
-/// else about it departs from that row's shape.
-class _WaterRow extends StatelessWidget {
-  const _WaterRow({required this.ml, this.onDown, this.onUp});
+/// Edge+: water or coffee, with the minus and plus on the tile. The icon
+/// says which; no caption.
+class _DoseTile extends StatelessWidget {
+  const _DoseTile({
+    required this.icon,
+    required this.color,
+    required this.value,
+    required this.empty,
+    required this.addLabel,
+    required this.removeLabel,
+    this.onDown,
+    this.onUp,
+  });
 
-  /// Null is NOT logged, which is a different answer from a logged zero and
-  /// reads differently here: "Not logged" against "0.0 L".
-  final double? ml;
+  final IconData icon;
+  final Color color;
+  final String value;
+
+  /// Nothing logged today: the figure is drawn muted.
+  final bool empty;
+  final String addLabel, removeLabel;
   final VoidCallback? onDown, onUp;
 
   @override
   Widget build(BuildContext c) {
-    final l = AppLocalizations.of(c);
     final p = P.of(c);
+    Widget step(IconData i, VoidCallback? onTap, String label) => Pressable(
+          onTap: onTap,
+          semanticLabel: label,
+          child: Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: onTap != null ? p.wash(color) : p.card2,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(i, size: 16, color: onTap != null ? p.on(color) : p.ink3),
+          ),
+        );
     return Surface(
-      child: Row(children: [
-        Icon(LucideIcons.glassWater, size: 18, color: p.on(C.blue)),
-        const SizedBox(width: S.x3),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(l?.nutritionWaterLabel ?? 'Water', style: F.body.copyWith(color: p.ink)),
-            Text(
-              ml == null
-                  ? (l?.nutritionNotLogged ?? 'Not logged')
-                  : (l?.nutritionTapToChange ?? 'Tap − or + to change'),
-              style: F.over.copyWith(color: p.ink3),
+      pad: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x3),
+      child: Column(children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 18, color: p.on(color)),
+          const SizedBox(width: S.x2),
+          Flexible(
+            child: Text(
+              value,
+              style: F.n24.copyWith(color: empty ? p.ink3 : p.ink),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-          ]),
-        ),
-        _WaterStep(LucideIcons.minus, onDown),
-        // Fixed width so the number does not shove the buttons sideways as it
-        // steps through 0.8 → 1.0 → 1.2.
-        SizedBox(
-          width: 78,
-          child: Text(
-            // NEVER a bare em-dash. An absent value says the word; a dash is a
-            // shrug the reader has to interpret, and the suite pins this.
-            ml == null
-                ? (l?.nutritionNoneYet ?? 'None yet')
-                : '${(ml! / 1000).toStringAsFixed(1)} L',
-            textAlign: TextAlign.center,
-            style: ml == null
-                ? F.cap.copyWith(color: p.ink3)
-                : F.n24.copyWith(color: p.ink),
-            maxLines: 1,
           ),
-        ),
-        _WaterStep(LucideIcons.plus, onUp),
+        ]),
+        const SizedBox(height: S.x2),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          step(LucideIcons.minus, onDown, removeLabel),
+          step(LucideIcons.plus, onUp, addLabel),
+        ]),
       ]),
     );
   }
 }
 
-class _WaterStep extends StatelessWidget {
-  const _WaterStep(this.icon, this.onTap);
-  final IconData icon;
+/// Edge+: a planned meal under its occasion, drawn apart from what was eaten.
+class _PlannedRow extends StatelessWidget {
+  const _PlannedRow(this.m, {this.onTap});
+  final PlannedMeal m;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext c) {
-    final l = AppLocalizations.of(c);
     final p = P.of(c);
-    final on = onTap != null;
     return Pressable(
       onTap: onTap,
-      semanticLabel: icon == LucideIcons.plus
-          ? (l?.nutritionAddWater ?? 'Add water')
-          : (l?.nutritionRemoveWater ?? 'Remove water'),
-      child: Container(
-        width: S.tap,
-        height: S.tap,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: on ? p.wash(C.blue) : p.card2,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, size: 18, color: on ? p.on(C.blue) : p.ink3),
+      semanticLabel: m.name,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: S.x3),
+        child: Row(children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: p.wash(C.domFood),
+              borderRadius: R.rSm,
+            ),
+            child: Icon(LucideIcons.calendarClock, size: 16, color: p.on(C.domFood)),
+          ),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(m.name, style: F.body.copyWith(color: p.ink2)),
+              if (m.kcal != null)
+                Text(
+                  '${m.kcal!.round()} kcal'
+                  '${m.servings == 1 ? '' : ' · ${servingsLabel(c, m.servings)}'}',
+                  style: F.over.copyWith(color: p.ink3),
+                ),
+            ]),
+          ),
+        ]),
       ),
     );
+  }
+}
+
+/// Edge+: the week calendar at the top of the tab. Seven days, Monday first,
+/// each with a small bar: eaten energy for a logged day, planned energy for
+/// the rest (paler). Chevrons move a week.
+class _WeekStrip extends StatelessWidget {
+  const _WeekStrip({
+    required this.days,
+    required this.today,
+    required this.selected,
+    required this.bars,
+    required this.logged,
+    required this.onPick,
+    required this.onShift,
+  });
+
+  final List<String> days;
+  final String today, selected;
+  final List<double?> bars;
+  final Set<String> logged;
+  final ValueChanged<String> onPick;
+  final ValueChanged<int> onShift;
+
+  static const _de = ['M', 'D', 'M', 'D', 'F', 'S', 'S'];
+  static const _en = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final letters =
+        Localizations.localeOf(c).languageCode == 'de' ? _de : _en;
+    final top = bars.whereType<double>().fold<double>(0, (a, b) => b > a ? b : a);
+    Widget chevron(IconData i, int dir) => Pressable(
+          onTap: () => onShift(dir),
+          semanticLabel: dir < 0
+              ? tr(c, 'Vorherige Woche', 'Previous week')
+              : tr(c, 'Nächste Woche', 'Next week'),
+          child: SizedBox(
+            width: 20,
+            height: 64,
+            child: Icon(i, size: 16, color: p.ink3),
+          ),
+        );
+    return Row(children: [
+      chevron(LucideIcons.chevronLeft, -1),
+      for (var i = 0; i < days.length; i++)
+        Expanded(
+          child: Pressable(
+            onTap: () => onPick(days[i]),
+            semanticLabel: days[i],
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(letters[i], style: F.over.copyWith(color: p.ink3)),
+              const SizedBox(height: S.x1),
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: days[i] == selected ? p.fill(C.domFood) : null,
+                  border: days[i] == today && days[i] != selected
+                      ? Border.all(color: p.on(C.domFood), width: 1.5)
+                      : null,
+                ),
+                child: Text(
+                  '${DateTime.parse(days[i]).day}',
+                  style: F.cap.copyWith(
+                    color: days[i] == selected ? p.inkOnFill : p.ink,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: S.x1),
+              SizedBox(
+                height: 18,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    width: 6,
+                    height: bars[i] == null || top <= 0
+                        ? 0
+                        : (18 * bars[i]! / top).clamp(3, 18).toDouble(),
+                    decoration: BoxDecoration(
+                      color: logged.contains(days[i])
+                          ? p.on(C.domFood)
+                          : p.wash(C.domFood),
+                      borderRadius: R.rPill,
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      chevron(LucideIcons.chevronRight, 1),
+    ]);
   }
 }
