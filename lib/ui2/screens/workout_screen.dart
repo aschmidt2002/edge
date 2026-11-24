@@ -34,6 +34,7 @@ import '../../state/app_state.dart';
 import '../../state/clock_format.dart' show formatClockOf;
 import '../../state/units_controller.dart';
 import '../../telemetry/telemetry_service.dart';
+import '../activity/run_insights.dart';
 import '../activity/catalogue.dart';
 import '../activity/day_strain.dart';
 import '../activity/live.dart';
@@ -271,6 +272,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           ],
         ],
       ),
+      const SizedBox(height: S.x3),
+      const RunInsightsCard(),
       // Edge+: training plans live under strength training.
       Section(
         tr(c, 'Krafttraining', 'Strength training'),

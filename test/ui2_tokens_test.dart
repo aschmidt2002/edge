@@ -202,6 +202,9 @@ const _notComponents = {
   'TabHeader', 'BandStatusIcon',
   // Edge+ experiments: each reads the database or AppState on build.
   'XpScreen', 'SleepPlannerCard', 'WorkModeTile', 'ExperimentalSection',
+  // Edge+: recovery / race card reads sessions; the fasting card owns a
+  // ticking clock and Prefs.
+  'RunInsightsCard', 'FastingCard',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
