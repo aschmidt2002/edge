@@ -1,19 +1,24 @@
-// Edge+: where the user's own API keys for the meal photo estimate are
-// entered (lib/ai/food_photo.dart). Gemini first, because its key is free;
-// Claude is the optional alternative and only used when no Gemini key is set.
-// Reached from Nutrition › Goals and from the log sheet the first time a
-// photo is taken without a key.
+// Edge+: the ONE place the user's AI keys are entered. The Gemini key (free)
+// serves the meal photo estimate (lib/ai/food_photo.dart) and, unless the
+// user unticks it, the coach (lib/ai/gemini_coach.dart). Claude is the
+// optional alternative for photos, only used when no Gemini key is set.
+// Reached from AI settings, Nutrition › Goals, and the log sheet the first
+// time a photo is taken without a key.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../ai/food_photo.dart';
+import '../../ai/gemini_coach.dart';
+import '../../coach/coach_config.dart';
 import '../ui2.dart';
 
 /// Resolves true when something was saved or removed.
-Future<bool?> editFoodAiKeys(BuildContext c) async {
+Future<bool?> editAiKeys(BuildContext c) async {
   final hasGemini = await geminiKey.read() != null;
   final hasClaude = await claudeKey.read() != null;
+  final model = await geminiModel();
   if (!c.mounted) return null;
   return showModalBottomSheet<bool>(
     context: c,
@@ -23,13 +28,16 @@ Future<bool?> editFoodAiKeys(BuildContext c) async {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(R.xxl)),
     ),
-    builder: (_) => _FoodAiKeySheet(hasGemini: hasGemini, hasClaude: hasClaude),
+    builder: (_) => _FoodAiKeySheet(
+        hasGemini: hasGemini, hasClaude: hasClaude, model: model),
   );
 }
 
 class _FoodAiKeySheet extends StatefulWidget {
-  const _FoodAiKeySheet({required this.hasGemini, required this.hasClaude});
+  const _FoodAiKeySheet(
+      {required this.hasGemini, required this.hasClaude, required this.model});
   final bool hasGemini, hasClaude;
+  final String model;
 
   @override
   State<_FoodAiKeySheet> createState() => _FoodAiKeySheetState();
@@ -41,6 +49,22 @@ class _FoodAiKeySheetState extends State<_FoodAiKeySheet> {
   late bool _hasGemini = widget.hasGemini;
   late bool _hasClaude = widget.hasClaude;
   late bool _showClaude = widget.hasClaude;
+  late String _model = widget.model;
+
+  /// Also use the Gemini key for the coach. On by default unless the coach
+  /// is already set up with a different provider.
+  CoachConfig? get _cfg {
+    try {
+      return context.read<CoachConfig>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  late bool _forCoach = () {
+    final cfg = _cfg;
+    return cfg == null || !cfg.configured || coachUsesGemini(cfg);
+  }();
 
   @override
   void dispose() {
@@ -73,11 +97,40 @@ class _FoodAiKeySheetState extends State<_FoodAiKeySheet> {
       if (!await _write(claudeKey, _claude.text)) return;
       changed = true;
     }
+    if (_model != widget.model) {
+      try {
+        await setGeminiModel(_model);
+        changed = true;
+      } catch (_) {}
+    }
+    final cfg = _cfg;
+    final g = await geminiKey.read();
+    if (cfg != null && _forCoach && g != null &&
+        (!coachUsesGemini(cfg) || cfg.apiKey != g || cfg.model != _model)) {
+      try {
+        await useGeminiForCoach(cfg, g);
+        changed = true;
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(tr(context,
+                  'Der Coach konnte nicht umgestellt werden.',
+                  'The coach could not be switched.'))));
+        }
+      }
+    }
     if (mounted) Navigator.of(context).pop(changed);
   }
 
   Future<void> _remove(ApiKeyStore store) async {
     if (!await _write(store, '')) return;
+    // The coach shares the Gemini key, so it goes there too.
+    final cfg = _cfg;
+    if (store == geminiKey && cfg != null && coachUsesGemini(cfg)) {
+      try {
+        await cfg.save(apiKey: '');
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() {
       if (store == geminiKey) {
@@ -143,18 +196,19 @@ class _FoodAiKeySheetState extends State<_FoodAiKeySheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(tr(c, 'KI für Essensfotos', 'AI for meal photos'),
+              Text(tr(c, 'KI-Key', 'AI key'),
                   style: F.t2.copyWith(color: p.ink)),
               const SizedBox(height: S.x3),
               Text(
                 tr(
                     c,
-                    'Die KI schätzt aus einem Foto Portion und Nährwerte. Das '
-                        'Foto geht nur an den Anbieter deines Keys, der Key '
-                        'bleibt verschlüsselt auf diesem Gerät.',
-                    'The AI estimates portion and nutrition from a photo. The '
-                        'photo goes only to the provider of your key, and the '
-                        'key stays encrypted on this device.'),
+                    'Einmal eintragen, gilt für alle KI-Aufgaben: Coach und '
+                        'Essensfotos. Daten gehen nur an den Anbieter deines '
+                        'Keys, der Key bleibt verschlüsselt auf diesem Gerät.',
+                    'Enter it once and it is used for every AI task: the coach '
+                        'and meal photos. Data goes only to the provider of '
+                        'your key, and the key stays encrypted on this '
+                        'device.'),
                 style: F.body.copyWith(color: p.ink2, height: 1.5),
               ),
               const SizedBox(height: S.x5),
@@ -185,6 +239,61 @@ class _FoodAiKeySheetState extends State<_FoodAiKeySheet> {
                 ),
                 if (_hasGemini) _removeLink(c, geminiKey),
               ]),
+              if (_cfg != null)
+                Row(children: [
+                  Checkbox(
+                    value: _forCoach,
+                    onChanged: (v) => setState(() => _forCoach = v ?? false),
+                  ),
+                  Expanded(
+                    child: Text(
+                        tr(c, 'Auch für den Coach verwenden',
+                            'Use it for the coach too'),
+                        style: F.body.copyWith(color: p.ink2)),
+                  ),
+                ]),
+              const SizedBox(height: S.x2),
+              Text(tr(c, 'MODELL', 'MODEL'),
+                  style: F.over.copyWith(color: p.ink3)),
+              const SizedBox(height: S.x2),
+              Row(children: [
+                for (final (m, label) in [
+                  (kGeminiFlash, tr(c, 'Flash (Standard)', 'Flash (default)')),
+                  (kGeminiPro, 'Pro'),
+                ]) ...[
+                  Expanded(
+                    child: Pressable(
+                      semanticLabel: label,
+                      onTap: () => setState(() => _model = m),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: S.x3),
+                        decoration: BoxDecoration(
+                          color: m == _model ? p.fill(C.domFood) : p.card2,
+                          borderRadius: R.rSm,
+                        ),
+                        child: Center(
+                          child: Text(label,
+                              style: F.cap.copyWith(
+                                  color: m == _model ? p.inkOnFill : p.ink2)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (m == kGeminiFlash) const SizedBox(width: S.x2),
+                ],
+              ]),
+              const SizedBox(height: S.x2),
+              Text(
+                tr(
+                    c,
+                    'Flash versteht Bilder und Text, ist schnell und im '
+                        'kostenlosen Kontingent. Pro ist gründlicher, aber '
+                        'langsamer und kostenlos kaum oder gar nicht nutzbar.',
+                    'Flash reads images and text, is fast and on the free '
+                        'tier. Pro is more thorough but slower, and barely or '
+                        'not at all usable for free.'),
+                style: F.cap.copyWith(color: p.ink3, height: 1.45),
+              ),
               const SizedBox(height: S.x5),
               if (!_showClaude)
                 Pressable(

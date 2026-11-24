@@ -342,7 +342,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     var ai = await activeFoodAi();
     if (ai == null) {
       if (!mounted) return;
-      await editFoodAiKeys(context);
+      await editAiKeys(context);
       ai = await activeFoodAi();
       if (ai == null || !mounted) return;
     }
