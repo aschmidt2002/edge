@@ -46,7 +46,6 @@ import '../../compute/findings.dart';
 import '../../models/metric.dart';
 import '../../models/activity_suggestion.dart';
 import '../screens/detected_activities.dart';
-import '../guides/help_entry.dart';
 import '../screens/slot_scrub.dart';
 import '../activity/catalogue.dart';
 import '../activity/live.dart';
@@ -213,7 +212,6 @@ Map<String, Widget> componentCases() => {
           pad: EdgeInsets.zero,
           child: EcgReadingRow(reading: _ecgDemoReading, onTap: () {})),
       'whoop_firmware_warning': const WhoopFirmwareWarning(),
-      'help_entry': const HelpEntry(topic: GuideTopic.today),
       'signal': const SignalCard(
           LucideIcons.heartPulse, C.blue, 'Resting heart rate', '52',
           unit: 'bpm', sub: '4 BELOW YOUR BASELINE'),

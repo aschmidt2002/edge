@@ -71,7 +71,6 @@ import '../profile/profile.dart';
 import '../profile/wearable_numbers.dart'
     show WearableCells, kHomeWearableRows;
 import '../ui2.dart';
-import '../guides/help_entry.dart';
 import 'ai_briefing.dart' show AiBriefingScreen;
 import 'coach.dart';
 import 'detected_activities.dart';
@@ -80,6 +79,7 @@ import 'metric_detail.dart';
 import 'readiness_detail.dart';
 import 'sleep_detail.dart';
 import 'health_screen.dart' show HealthScreen;
+import 'journal_prompt.dart' show GreetingTemp;
 import '../../data/meal_plan_store.dart';
 import '../../notify/tap_router.dart' show kRouteWater;
 import '../experimental/xp_features.dart'
@@ -88,8 +88,9 @@ import '../experimental/xp_core.dart' show stressColor, stressWord;
 
 // ═══════════════════ shared plumbing ═══════════════════
 
-/// Page padding. The bottom inset clears the shell's floating nav.
-const pad = EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x16 + S.x8);
+/// Page padding. Edge+: the nav bar is not floating, so the page ends
+/// right after its last card.
+const pad = EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x6);
 
 /// Push a detail screen. Every drill-down in ui2 goes through here.
 ///
@@ -2411,6 +2412,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         ),
         const SizedBox(width: S.x2),
         Icon(g.icon, size: 16, color: p.on(g.color)),
+        // Edge+: the temperature right now, small.
+        if (widget.data == null) const GreetingTemp(),
       ]),
     );
   }
@@ -2529,9 +2532,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
             const SizedBox(height: S.x3),
             alarmDoor(c, a.$1, a.$2),
           ],
-        // The Today guide starts on the strain ring, which a past day does not draw.
-        if (_day == null || _day == todayLabel())
-          const HelpEntry(topic: GuideTopic.today),
       ]));
     }
 
@@ -2700,8 +2700,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         const SizedBox(height: S.x4),
         coachChip(c),
       ],
-      // The Today guide starts on the strain ring, which a bare past day does not draw.
-      if (isToday) const HelpEntry(topic: GuideTopic.today),
     ]));
   }
 

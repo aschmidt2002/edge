@@ -14,7 +14,6 @@ import '../profile/alarm.dart';
 import '../experimental/xp_features.dart'
     show SleepPlannerCard, XpScreen, loadSleepStress;
 import '../ui2.dart';
-import '../guides/help_entry.dart';
 import 'circadian_detail.dart';
 import 'sleep_detail.dart';
 import 'wellness_screen.dart';
@@ -66,7 +65,6 @@ class SleepTab extends StatelessWidget {
             () => push(XpScreen(stress, loadSleepStress)),
           ),
         ]),
-        const HelpEntry(topic: GuideTopic.sleep),
       ],
     );
   }

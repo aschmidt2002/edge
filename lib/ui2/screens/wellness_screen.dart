@@ -305,7 +305,7 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
             child: NavBar(l?.wellnessTitle ?? 'Wellness'),
           ),
           Expanded(child: ListView(
-      padding: const EdgeInsets.fromLTRB(0, 0, 0, S.x16),
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, S.x6),
       children: [
         for (final w in <Widget>[
           SubTabs([for (final i in visible) labels[i]], visible.indexOf(tab),

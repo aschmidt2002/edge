@@ -199,3 +199,88 @@ class WeatherBox extends StatelessWidget {
     );
   }
 }
+
+/// Edge+: the temperature right now, small, beside the greeting's sun or
+/// moon. With no place at all it shows a pin to type one in; a tap on the
+/// temperature changes the place too.
+class GreetingTemp extends StatefulWidget {
+  const GreetingTemp({super.key});
+
+  @override
+  State<GreetingTemp> createState() => _GreetingTempState();
+}
+
+class _GreetingTempState extends State<GreetingTemp> {
+  late Future<TodayWeather?> _w = fetchTodayWeather();
+
+  Future<void> _askPlace() async {
+    final ctl = TextEditingController(text: weatherPlace());
+    var failed = false;
+    await showDialog<void>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (d, set) => AlertDialog(
+          title: Text(tr(d, 'Ort fürs Wetter', 'Place for the weather')),
+          content: TextField(
+            controller: ctl,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: tr(d, 'z. B. Berlin', 'e.g. Berlin'),
+              errorText: failed ? tr(d, 'Nicht gefunden', 'Not found') : null,
+            ),
+          ),
+          actions: [
+            if (weatherPlace().isNotEmpty)
+              TextButton(
+                onPressed: () async {
+                  await setWeatherPlace('');
+                  if (d.mounted) Navigator.pop(d);
+                },
+                child: Text(tr(d, 'Standort nutzen', 'Use location')),
+              ),
+            TextButton(
+              onPressed: () async {
+                final ok = await setWeatherPlace(ctl.text);
+                if (!d.mounted) return;
+                if (ok) {
+                  Navigator.pop(d);
+                } else {
+                  set(() => failed = true);
+                }
+              },
+              child: Text(tr(d, 'Speichern', 'Save')),
+            ),
+          ],
+        ),
+      ),
+    );
+    ctl.dispose();
+    if (mounted) setState(() => _w = fetchTodayWeather());
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return FutureBuilder<TodayWeather?>(
+      future: _w,
+      builder: (c, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const SizedBox.shrink();
+        }
+        final w = snap.data;
+        return Pressable(
+          onTap: _askPlace,
+          semanticLabel: w == null
+              ? tr(c, 'Ort fürs Wetter eingeben', 'Set a place for the weather')
+              : '${w.temp.round()}°',
+          child: Padding(
+            padding: const EdgeInsets.only(left: S.x1),
+            child: w == null
+                ? Icon(LucideIcons.mapPin, size: 12, color: p.ink3)
+                : Text('${w.temp.round()}°', style: F.mini.copyWith(color: p.ink3)),
+          ),
+        );
+      },
+    );
+  }
+}
