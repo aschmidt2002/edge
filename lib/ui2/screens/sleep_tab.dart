@@ -11,6 +11,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../profile/alarm.dart';
+import '../experimental/xp_features.dart' show SleepPlannerCard;
 import '../ui2.dart';
 import '../guides/help_entry.dart';
 import 'circadian_detail.dart';
@@ -31,6 +32,7 @@ class SleepTab extends StatelessWidget {
           l?.sleepTabPlanTitle ?? 'Your sleep plan',
           const WellnessScreen(sleepPlanOnly: true),
         ),
+        const SleepPlannerCard(),
       ],
       footer: [
         Section(

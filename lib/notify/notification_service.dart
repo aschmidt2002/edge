@@ -136,6 +136,7 @@ class NotificationService {
   static const int idAlarmNightCheck = 2008; // scheduled daily, one-shot 19:00
   static const int idStillness = 2200; // provisional one-shot ("time to move", issue #123)
   static const int idCheckIn = 2201; // daily ("how was today?" → the journal)
+  static const int idCreatine = 2202; // Edge+: daily 22:00 unless ticked off
 
   /// Slot band [idMedsBase .. idMedsBase + maxMedSlots) — one ONE-SHOT per
   /// scheduled dose that is still upcoming, armed by
@@ -206,6 +207,8 @@ class NotificationService {
     idStillness,
     idCheckIn,
     idAlarmNightCheck,
+    // Edge+: armed only once creatine is tracked, skipped on ticked days.
+    idCreatine,
   };
 
   /// Whether [id] is one of the hydration slots. A band rather than a set

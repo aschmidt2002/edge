@@ -61,12 +61,9 @@ class WorkoutScreen extends StatefulWidget {
 }
 
 class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
+  // Edge+: no sub-tab switcher. 0 is the page, 2 is History, opened from the
+  // clock icon on the start card.
   int tab = 0;
-  List<String> _tabs(AppLocalizations? loc) => [
-        loc?.workoutTabForYou ?? 'For you',
-        loc?.workoutTabActivities ?? 'Activities',
-        loc?.workoutTabHistory ?? 'History',
-      ];
 
   Future<_WorkoutData>? _load;
 
@@ -108,11 +105,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
         // the first load gets here — a reload keeps the previous snapshot.
         final List<Widget> body;
         if (snap.hasData) {
-          body = switch (tab) {
-            0 => _forYou(c, d),
-            1 => _activities(c, d),
-            _ => _history(c, d),
-          };
+          body = tab == 2 ? _history(c, d) : _forYou(c, d);
         } else if (snap.hasError) {
           body = [
             StatusCard(
@@ -138,15 +131,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
         // (which takes an unbounded height inside a scroll view and blanked
         // this whole tab on device). Padding the siblings is ordinary layout
         // and cannot do either.
-        return ListView(
+        return PopScope(
+          canPop: tab != 2,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) setState(() => tab = 0);
+          },
+          child: ListView(
           padding: const EdgeInsets.fromLTRB(0, S.x2, 0, S.x16),
           children: [
             for (final w in <Widget>[
               ScreenTitle(loc?.tabActivity ?? 'Activity',
                   trailing: const ProfileAvatar(accent: C.domMove)),
-              SubTabs(_tabs(loc), tab, (i) => setState(() => tab = i),
-                  color: C.domMove),
-              const SizedBox(height: S.x5),
+              if (tab == 2)
+                _historyHeader(c)
+              else
+                const SizedBox(height: S.x3),
               ...body,
               const HelpEntry(topic: GuideTopic.activity),
             ])
@@ -157,9 +156,61 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
                     padding: const EdgeInsets.symmetric(horizontal: S.x4),
                     child: w),
           ],
+        ),
         );
       },
     ),
+    );
+  }
+
+  /// Back from History to the page.
+  Widget _historyHeader(BuildContext c) {
+    final p = P.of(c);
+    final loc = AppLocalizations.of(c);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: S.x4),
+      child: Pressable(
+        onTap: () => setState(() => tab = 0),
+        child: Row(children: [
+          Icon(LucideIcons.chevronLeft, size: 20, color: p.ink2),
+          const SizedBox(width: S.x1),
+          Text(loc?.workoutTabHistory ?? 'History',
+              style: F.head.copyWith(color: p.ink)),
+        ]),
+      ),
+    );
+  }
+
+  /// Edge+: the small start card. Tap starts a session, the clock opens History.
+  Widget _startCard(BuildContext c, _WorkoutData d) {
+    final p = P.of(c);
+    final loc = AppLocalizations.of(c);
+    return Surface(
+      pad: const EdgeInsets.fromLTRB(S.x4, S.x3, S.x2, S.x3),
+      onTap: () => _openPicker(c, d),
+      semanticLabel: loc?.workoutStartSessionLabel ?? 'Start a session',
+      child: Row(children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration:
+              BoxDecoration(color: p.fill(C.purple), shape: BoxShape.circle),
+          child: Icon(LucideIcons.play, size: 18, color: p.inkOnFill),
+        ),
+        const SizedBox(width: S.x3),
+        Expanded(
+          child: Text(loc?.workoutTabActivities ?? 'Activities',
+              style: F.head.copyWith(color: p.ink)),
+        ),
+        Pressable(
+          onTap: () => setState(() => tab = 2),
+          semanticLabel: loc?.workoutTabHistory ?? 'History',
+          child: Padding(
+            padding: const EdgeInsets.all(S.x2),
+            child: Icon(LucideIcons.history, size: 22, color: p.ink2),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -176,15 +227,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);
     return [
-      StartCard(
-        label: loc?.workoutStartSessionLabel ?? 'START A SESSION',
-        count: allActivities.length,
-        noun: loc?.workoutActivitiesNoun ?? 'activities',
-        asset: 'mascot_workout.png',
-        accent: C.purple,
-        deep: C.indigo,
-        onTap: () => _openPicker(c, d),
-      ),
+      _startCard(c, d),
       const SizedBox(height: S.x3),
       Row(
         children: [
@@ -496,6 +539,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
   }
 
   // ─────────────── ACTIVITIES ───────────────
+  // ignore: unused_element
   List<Widget> _activities(BuildContext c, _WorkoutData d) {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);

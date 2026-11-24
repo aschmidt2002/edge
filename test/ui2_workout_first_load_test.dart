@@ -68,13 +68,7 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     // No start tiles to tap with a weight that has not been read yet.
     expect(find.byType(StartCard), findsNothing);
-
-    await t.tap(find.text('Activities'));
-    await t.pump();
     expect(find.text('Calorie estimates need your weight'), findsNothing);
-
-    await t.tap(find.text('History'));
-    await t.pump();
     expect(find.text('No sessions recorded yet'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
@@ -90,8 +84,6 @@ void main() {
     app.repo = _BrokenHistoryRepo();
 
     await t.pumpWidget(_app(app));
-    await t.pumpAndSettle();
-    await t.tap(find.text('History'));
     await t.pumpAndSettle();
     expect(find.text('No sessions recorded yet'), findsNothing);
     expect(find.text('Activity could not be read'), findsOneWidget);
