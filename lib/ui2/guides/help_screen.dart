@@ -54,7 +54,7 @@ class _HelpScreenState extends State<HelpScreen> {
   bool _showAll = false;
 
   static String _topicName(AppLocalizations l, GuideTopic topic) => switch (topic) {
-        GuideTopic.today => l.tabToday,
+        GuideTopic.today => kHomeTabTitle,
         GuideTopic.sleep => l.tabSleep,
         GuideTopic.activity => l.tabActivity,
         GuideTopic.health => l.tabHealth,

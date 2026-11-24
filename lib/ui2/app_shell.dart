@@ -19,6 +19,10 @@ import 'grammar.dart';
 import 'theme.dart';
 
 /// The four primary destinations, in bar order.
+/// Edge+: the first tab is called Home in every language; the guides quote
+/// this same word.
+const kHomeTabTitle = 'Home';
+
 enum ShellDomain {
   today('Today', LucideIcons.house, C.domHome),
   sleep('Sleep', LucideIcons.moon, C.domSleep),
@@ -38,7 +42,7 @@ enum ShellDomain {
     final l = AppLocalizations.of(c);
     return switch (this) {
           // Edge+: the first tab is called Home in every language.
-          ShellDomain.today => 'Home',
+          ShellDomain.today => kHomeTabTitle,
           ShellDomain.sleep => l?.tabSleep,
           ShellDomain.activity => l?.tabActivity,
           ShellDomain.health => l?.tabHealth,

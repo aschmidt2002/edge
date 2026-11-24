@@ -9,6 +9,7 @@
 
 import '../../compute/nap_edits.dart' show kMinManualNapSec, kMaxManualNapSec;
 import '../../l10n/app_localizations.dart';
+import '../app_shell.dart' show kHomeTabTitle;
 import 'guide_text.dart';
 
 enum GuideCopy implements GuideText {
@@ -84,7 +85,7 @@ enum GuideCopy implements GuideText {
   String of(AppLocalizations l) => switch (this) {
         GuideCopy.hrZonesTitle => l.guideHrZonesTitle,
         GuideCopy.hrZonesIntro => l.guideHrZonesIntro(l.homeRingStrain),
-        GuideCopy.hrZonesCaptionOpenStrain => l.guideHrZonesStep1(l.tabToday, l.homeRingStrain),
+        GuideCopy.hrZonesCaptionOpenStrain => l.guideHrZonesStep1(kHomeTabTitle, l.homeRingStrain),
         GuideCopy.hrZonesCaptionOpenZones => l.guideHrZonesStep2(l.dayStrainTimeInZonesSection, l.dayStrainHowSet),
         GuideCopy.hrZonesCaptionSetOwnZones => l.guideHrZonesStep3(l.activityZonesTitle, l.activityZonesSetYourOwnLink, l.activityZonesEditYourOwnLink),
         GuideCopy.hrZonesFooter0Title => l.guideHrZonesAltTitle,
@@ -109,7 +110,7 @@ enum GuideCopy implements GuideText {
         GuideCopy.addNapFooter2Title => l.guideAddNapRulesTitle,
         GuideCopy.addNapFooter2Body => l.guideAddNapRulesBody('${kMinManualNapSec ~/ 60}', '${kMaxManualNapSec ~/ 3600}'),
         GuideCopy.removeTitle => l.guideRemoveTitle,
-        GuideCopy.removeCaptionOpenDetected => l.guideRemoveStep1(l.tabToday, l.activityReviewTitle),
+        GuideCopy.removeCaptionOpenDetected => l.guideRemoveStep1(kHomeTabTitle, l.activityReviewTitle),
         GuideCopy.removeCaptionDiscard => l.guideRemoveStep2(l.napsNotANapLabel, l.activityNotAWorkout),
         GuideCopy.removeCaptionDiscardStill => l.guideRemoveStep2Still(l.napsNotANapLabel, l.activityNotAWorkout),
         GuideCopy.removeFooter0Title => l.guideRemoveSavedTitle,

@@ -200,8 +200,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           child: Icon(LucideIcons.play, size: 18, color: p.inkOnFill),
         ),
         const SizedBox(width: S.x3),
+        // The words the guides quote ("Start a session", "History") are the
+        // words on the card, so a guide can point at them.
         Expanded(
-          child: Text(loc?.workoutTabActivities ?? 'Activities',
+          child: Text(_sentence(loc?.workoutStartSessionLabel ?? 'Start a session'),
               style: F.head.copyWith(color: p.ink)),
         ),
         Pressable(
@@ -209,12 +211,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           semanticLabel: loc?.workoutTabHistory ?? 'History',
           child: Padding(
             padding: const EdgeInsets.all(S.x2),
-            child: Icon(LucideIcons.history, size: 22, color: p.ink2),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(LucideIcons.history, size: 20, color: p.ink2),
+              const SizedBox(width: S.x1),
+              Text(loc?.workoutTabHistory ?? 'History',
+                  style: F.cap.copyWith(color: p.ink2)),
+            ]),
           ),
         ),
       ]),
     );
   }
+
+  /// "START A SESSION" → "Start a session": the label is an overline in caps.
+  static String _sentence(String s) => s.isEmpty
+      ? s
+      : s.characters.first.toUpperCase() + s.characters.skip(1).toString().toLowerCase();
 
   void _openPicker(BuildContext c, _WorkoutData d) =>
       Navigator.of(c).push(MaterialPageRoute(

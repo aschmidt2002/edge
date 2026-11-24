@@ -100,7 +100,7 @@ void main() { setUpAll(() async { sqfliteFfiInit(); databaseFactory = databaseFa
       final app = await pumpLiveGuideApp(t); await _startFromHelp(t, app, 'heart-rate-zones'); final l = _l(t);
       expect(find.byType(HelpScreen), findsNothing, reason: 'popped to the shell root');
       expect(find.byType(LiveGuideOverlay), findsOneWidget); expect(app.navigator.canPop(), isFalse); expect(_step(app), 0);
-      expect(_caption(t), _plain(l.guideHrZonesStep1(l.tabToday, l.homeRingStrain)));
+      expect(_caption(t), _plain(l.guideHrZonesStep1('Home', l.homeRingStrain)));
       final shapes = _overlay(t).paintedShapes; final ring = t.getRect(_label(l.homeRingStrain)); expect(shapes, isNotEmpty);
       expect(shapes.any((s) => s.rect.overlaps(ring.deflate(1))), isFalse, reason: 'the Strain ring stays legible');
       final recovery = t.getRect(_label(l.homeRingRecovery)); expect(shapes.any((s) => s.rect.overlaps(recovery.deflate(1))), isFalse,
@@ -155,9 +155,9 @@ void main() { setUpAll(() async { sqfliteFfiInit(); databaseFactory = databaseFa
         // clear of the outline and the pill.
         final app = await pumpLiveGuideApp(t, locale: locale, textScale: 1.3); await _startFromHelp(t, app, 'heart-rate-zones');
         await settleMovingGuide(t);
-        final l = lookupAppLocalizations(locale); expect(t.takeException(), isNull); expect(_caption(t), _plain(l.guideHrZonesStep1(l.tabToday, l.homeRingStrain)));
+        final l = lookupAppLocalizations(locale); expect(t.takeException(), isNull); expect(_caption(t), _plain(l.guideHrZonesStep1('Home', l.homeRingStrain)));
         final card = t.getRect(find.byKey(GuideStepCard.cardKey)); expect(card.overlaps(t.getRect(liveGuideFocus)), isFalse, reason: 'card=$card focus=${t.getRect(liveGuideFocus)} target=${t.state<LiveGuideOverlayState>(find.byType(LiveGuideOverlay)).targetRect} hand=${t.state<LiveGuideOverlayState>(find.byType(LiveGuideOverlay)).handTargets.map((e) => e.rect).toList()}');
-        expect(card.overlaps(t.getRect(find.byKey(LiveGuideOverlay.tapPillKey))), isFalse); final tabBar = t.getRect(_label(l.tabToday).last);
+        expect(card.overlaps(t.getRect(find.byKey(LiveGuideOverlay.tapPillKey))), isFalse); final tabBar = t.getRect(_label('Home').last);
         expect(card.bottom, lessThanOrEqualTo(tabBar.top + 1), reason: 'the bottom card sits above the tab bar'); }); } }); group('guide #7 start a workout', () {
     testWidgets('start from Help selects the Activity tab; tapping the real "start a session" card opens the real picker and the run advances', (t) async {
       // why: a second guide, another tab, a pushed route that is not a detail screen.

@@ -269,6 +269,7 @@ class _SleepPlannerCardState extends State<SleepPlannerCard> {
             ]),
           ),
           Pressable(
+            semanticLabel: tr(c, 'Aufstehzeit ändern', 'Change wake time'),
             onTap: () async {
               final t = await showTimePicker(context: c, initialTime: wake);
               if (t == null) return;
@@ -276,7 +277,7 @@ class _SleepPlannerCardState extends State<SleepPlannerCard> {
               setState(() {});
             },
             child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(tr(c, 'Wecker', 'Wake up'), style: F.cap.copyWith(color: p.ink2)),
+              Text(tr(c, 'Aufstehen um', 'Wake at'), style: F.cap.copyWith(color: p.ink2)),
               Text(
                   '${two(wake.hour)}:${two(wake.minute)}',
                   style: F.n24.copyWith(color: p.on(C.blue))),

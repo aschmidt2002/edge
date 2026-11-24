@@ -212,7 +212,7 @@ void main() { setUpAll(() async { await loadFonts(); await skLoadAppFonts(); awa
     testWidgets('r2 off path on the shell: the route-back tab has a "Guide: open the Today tab" proxy', (t) async {
       final handle = t.ensureSemantics(); final app = await pumpLiveGuideApp(t, size: r2Size); try {
         final started = await app.runner.start(r2Guide('heart-rate-zones'), band: null) as GuideStarted;
-        await settleLiveGuide(t, frames: 18); final proxy = find.semantics.byLabel(r2Locale.guideTabProxy(r2Locale.tabToday));
+        await settleLiveGuide(t, frames: 18); final proxy = find.semantics.byLabel(r2Locale.guideTabProxy('Home'));
         expect(proxy, findsNothing, reason: 'on the path the tab is not highlighted, so there is no proxy');
         await t.tapAt(t.getRect(r2Tab(3)).center); await settleLiveGuide(t, frames: 12); expect(started.run.state, isA<GuideOffPath>());
         expect(proxy, findsOneWidget, reason: 'off path the Today tab is the highlighted route back'); t.semantics.tap(proxy); await settleLiveGuide(t, frames: 12);

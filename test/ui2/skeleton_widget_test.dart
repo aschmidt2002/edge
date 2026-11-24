@@ -189,11 +189,12 @@ void main() { group('SkeletonBar / SkeletonBlock', () { testWidgets('take exactl
       final body = skLocalRect(t, find.byType(Surface), find.byKey(root)); expect(rects.where((c) => c.overlaps(body)), isEmpty); });
     testWidgets("finds AppShell's tab bar by type without app_shell.dart changes", (t) async {
       // why: the real bottom navigation is a private _TabBar (app_shell.dart:215).
-      // The resolver must cover all four tabs and only them.
+      // The resolver must cover all four tab buttons and only them (Edge+:
+      // Home, Sleep, Activity, Nutrition; Health opens from Home).
       skTallView(t, w: 400, h: 800); const root = ValueKey('root'); await t.pumpWidget(skHost(SizedBox( key: root, width: 400, height: 800,
         child: AppShell(builder: (c, d) => Center(child: Text('page ${d.name}'))), )));
       final rects = defaultSkeletonChrome(t.element(find.byKey(root)));
-      final tabs = [for (final l in ['Today', 'Sleep', 'Activity', 'Health']) skLocalRect(t, find.text(l), find.byKey(root))];
+      final tabs = [for (final l in ['Home', 'Sleep', 'Activity', 'Nutrition']) skLocalRect(t, find.text(l), find.byKey(root))];
       expect(rects.any((c) => tabs.every((r) => skContains(c, r))), isTrue, reason: 'one chrome rect must hold all 4 tabs: $rects');
       final page = skLocalRect(t, find.text('page today'), find.byKey(root)); expect(rects.where((c) => c.overlaps(page)), isEmpty); });
     testWidgets('a plain tree has no chrome', (t) async {
