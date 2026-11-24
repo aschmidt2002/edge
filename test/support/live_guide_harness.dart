@@ -86,7 +86,10 @@ Future<LiveGuideApp> pumpLiveGuideApp( WidgetTester t, { Widget? home, Locale lo
   Size size = const Size(390, 844), GuideRunner? runner, LocalRepository? repo, BleEngine? engine, Brightness brightness = Brightness.light,
   double devicePixelRatio = 1, GlobalKey? captureKey, CoachConfig? coachConfig, }) async { SharedPreferences.setMockInitialValues(const {}); await Prefs.ensureLoaded();
   // Prefs caches its own instance across tests, while setMockInitialValues replaces the plugin singleton. Seed its synchronous tab read explicitly.
-  Prefs.setInt(Prefs.shellTabV2, 0); t.view.physicalSize = size * devicePixelRatio; t.view.devicePixelRatio = devicePixelRatio; addTearDown(t.view.reset);
+  Prefs.setInt(Prefs.shellTabV2, 0); 
+  // Edge+: the once-a-day check-in (journal_prompt.dart) opens over Home from 04:00 local time. Mark both as already shown today so a guide run does not depend on the hour the suite happens to run at.
+  final checkInDay = todayLabel(); Prefs.setString('plus_checkin_morning_day', checkInDay); Prefs.setString('plus_checkin_evening_day', checkInDay);
+  t.view.physicalSize = size * devicePixelRatio; t.view.devicePixelRatio = devicePixelRatio; addTearDown(t.view.reset);
   // Sleep correction controls require retained input. Seed only a test DB row; the repository's published night alone does not establish correctability.
   if (repo is GuideFakeRepo || repo == null) { await t.runAsync(() async { final ts = GuideFakeRepo._at(12, 0); await (await LocalDb.instance).rawInsert(
         'INSERT OR REPLACE INTO decoded_onehz (device_id, ts_ms, rec_ts, counter, hr) VALUES (?, ?, ?, ?, ?)', ['', ts * 1000, ts, ts % 100000, 60], ); }); }
