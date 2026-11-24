@@ -8898,6 +8898,8 @@ class DerivationEngine {
       'steps': sc('steps'),
       'nap_min': sc('nap_min'),
       'efficiency': sc('efficiency'),
+      // Edge+: nightly sleep stress (0–100) for the sleep score.
+      'stress': sc('stress'),
       'onset_sec': onsetMs == null ? null : (onsetMs / 1000).round(),
       'wake_sec': offsetMs == null ? null : (offsetMs / 1000).round(),
       // Which clock the night was LIVED on, relative to the phone's zone now.
