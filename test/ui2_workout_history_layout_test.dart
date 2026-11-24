@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart'; import 'package:flutter/rendering.dart'; import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart'; import 'package:flutter/rendering.dart'; import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/data/db.dart'; import 'package:openstrap_edge/data/local_repository.dart';
 import 'package:openstrap_edge/l10n/app_localizations.dart'; import 'package:openstrap_edge/state/app_state.dart';
 import 'package:openstrap_edge/state/prefs.dart'; import 'package:openstrap_edge/state/units_controller.dart';
@@ -28,7 +29,7 @@ void main() { setUpAll(() async { sqfliteFfiInit();
           supportedLocales: AppLocalizations.supportedLocales, builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)), child: child!, ),
           home: const Scaffold(body: WorkoutScreen()), ), )); await t.pumpAndSettle();
-      await t.ensureVisible(find.text(l.workoutTabHistory)); await t.pumpAndSettle(); await t.tap(find.text(l.workoutTabHistory));
+      await t.tap(find.byIcon(LucideIcons.history));
       await t.pumpAndSettle(); final retime = find.byWidgetPredicate((w) =>
           w is Pressable && w.semanticLabel == l.workoutFixTimesOnSessionLabel); await t.ensureVisible(retime); await t.pumpAndSettle();
       expect(retime.hitTestable(), findsOneWidget); final label = find.text(l.workoutFixTimes); expect(label, findsOneWidget);
