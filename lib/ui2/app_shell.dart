@@ -23,6 +23,15 @@ import 'theme.dart';
 /// this same word.
 const kHomeTabTitle = 'Home';
 
+/// Edge+: which button of the tab bar shows the tab at [domainIndex]
+/// (a [ShellDomain] index); null for Health, which opens from Home.
+int? shellTabButtonIndex(int domainIndex) {
+  if (domainIndex < 0 || domainIndex >= ShellDomain.values.length) return null;
+  final d = ShellDomain.values[domainIndex];
+  if (d == ShellDomain.health) return null;
+  return ShellDomain.values.where((x) => x != ShellDomain.health).toList().indexOf(d);
+}
+
 enum ShellDomain {
   today('Today', LucideIcons.house, C.domHome),
   sleep('Sleep', LucideIcons.moon, C.domSleep),

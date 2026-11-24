@@ -93,7 +93,8 @@ const guideNavigationTree = <GuideNode, GuideDestination>{
   GuideNode.activityOverview: GuideDestination(GuideNode.activity),
   GuideNode.activityActivities: GuideDestination(GuideNode.activity),
   GuideNode.activityHistory: GuideDestination(GuideNode.activity),
-  GuideNode.health: GuideDestination(null, ['HealthScreen']),
+  // Edge+: Health opens from Home; Nutrition is a tab of its own.
+  GuideNode.health: GuideDestination(GuideNode.today, ['HealthScreen']),
   GuideNode.healthOverview: GuideDestination(GuideNode.health),
   GuideNode.healthExplore: GuideDestination(GuideNode.health),
   GuideNode.healthTrends: GuideDestination(GuideNode.health),
@@ -110,7 +111,7 @@ const guideNavigationTree = <GuideNode, GuideDestination>{
   GuideNode.recovery: GuideDestination(GuideNode.today, ['ReadinessDetail']),
   GuideNode.stress: GuideDestination(GuideNode.today, []),
   GuideNode.journal: GuideDestination(GuideNode.today, ['JournalCompose']),
-  GuideNode.nutrition: GuideDestination(GuideNode.today, ['NutritionScreen']),
+  GuideNode.nutrition: GuideDestination(null, ['NutritionScreen']),
   GuideNode.nutritionLog: GuideDestination(GuideNode.nutrition, [
     'LogFoodSheet',
   ]),
@@ -304,7 +305,7 @@ class GuideNavigation {
           GuideNode.sleep,
           GuideNode.activity,
           GuideNode.health,
-          GuideNode.settings,
+          GuideNode.nutrition, // Edge+
         ][w.index ?? 0];
       }
     }
@@ -346,7 +347,7 @@ class GuideNavigation {
     GuideNode.sleep => 1,
     GuideNode.activity => 2,
     GuideNode.health => 3,
-    GuideNode.settings => 4,
+    GuideNode.nutrition => 4, // Edge+: the fifth tab; Settings has none
     _ => null,
   };
   static int? subTabIndex(GuideNode node) => switch (node) {

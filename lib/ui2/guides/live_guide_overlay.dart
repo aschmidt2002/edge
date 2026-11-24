@@ -59,7 +59,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../app_shell.dart' show AppShell;
+import '../app_shell.dart' show AppShell, shellTabButtonIndex;
 import '../grammar.dart' show NavBar, Pressable, SubTabs;
 import '../theme.dart';
 import 'guide.dart';
@@ -925,13 +925,15 @@ class LiveGuideOverlayState extends State<LiveGuideOverlay> with TickerProviderS
             .firstOrNull;
       }
     }
-    final startTab = routeTab ??
+    final startDomain = routeTab ??
         (hop?.kind == GuideHopKind.tab
             ? GuideNavigation.tabIndex(hop!.node)
             : null) ?? switch (widget.run.guide.start) {
       GuideStart.today => 0, GuideStart.sleep => 1, GuideStart.activity => 2, GuideStart.health => 3,
       GuideStart.settings => -1,
     };
+    // Edge+: the tab bar has no Health button, so a tab index is not a button index.
+    final startTab = shellTabButtonIndex(startDomain) ?? -1;
     if (back == null &&
         (hop == null || hop.kind == GuideHopKind.tab) && startTab >= 0 && startTab < tabs.length) {
       back = tabs[startTab];

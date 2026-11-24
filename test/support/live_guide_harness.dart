@@ -9,7 +9,7 @@ import 'package:openstrap_edge/coach/coach_config.dart';
 import 'dart:convert'; import 'package:flutter/material.dart'; import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/app.dart' show AppMainShell; import 'package:openstrap_edge/data/day_label.dart';
 import 'package:openstrap_edge/state/locale_controller.dart'; import 'package:openstrap_edge/ble/ble_engine.dart';
-import 'package:openstrap_edge/data/db.dart'; import 'package:openstrap_edge/data/local_repository.dart';
+import 'package:openstrap_edge/data/db.dart'; import 'package:openstrap_edge/data/journal_fields.dart' show JournalMetricValue; import 'package:openstrap_edge/data/local_repository.dart';
 import 'package:openstrap_edge/l10n/app_localizations.dart'; import 'package:openstrap_edge/models/activity_suggestion.dart';
 import 'package:openstrap_edge/state/app_state.dart'; import 'package:openstrap_edge/state/prefs.dart';
 import 'package:openstrap_edge/state/units_controller.dart'; import 'package:openstrap_edge/theme/theme_controller.dart';
@@ -36,6 +36,8 @@ class GuideFakeRepo extends LocalRepository {
           ActivitySuggestion( id: 'w1', kind: ActivityKind.workout, startTs: _at(17, 30, daysAgo: 1), endTs: _at(18, 10, daysAgo: 1),
             revision: 0, details: const {'sport': 'running', 'peak_bpm': 168, 'avg_bpm': 141}, ), ].take(singlePending ? 1 : 2).toList() : const []; @override
   Future<Map<String, dynamic>> getChart(String metric, {int? from, int? to, Set<String> signals = const {}}) async => const {'points': []};
+  // Edge+: Nutrition is a tab, and it reads the day's water.
+  @override Future<Map<String, JournalMetricValue>> getJournalMetrics(String date) async => const {};
   @override Future<Map<String, dynamic>> getDayTimeline(String date) async => const {}; @override
   Future<Map<String, dynamic>> getDayNaps(String date) async => const {'naps': [], 'nap_min': 0}; @override
   Future<List<Map<String, dynamic>>> sleepWindows({int days = 60, String? before}) async => const []; @override
