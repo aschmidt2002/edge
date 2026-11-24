@@ -153,12 +153,7 @@ class WeightGoalSection extends StatelessWidget {
     if (target == null) {
       return StatusCard(
         tr(c, 'Kein Zielgewicht', 'No target weight'),
-        tr(
-            c,
-            'Gib dein Wunschgewicht ein. Edge+ rechnet aus deinem Grundumsatz, '
-                'deiner Aktivität und dem, was du isst, aus, wann du es erreichst.',
-            'Enter the weight you want. Edge+ works out from your resting '
-                'burn, your activity and what you eat when you will get there.'),
+        '',
         fix: tr(c, 'Zielgewicht setzen', 'Set target weight'),
         icon: LucideIcons.scale,
         onFix: onEdit,
@@ -167,8 +162,7 @@ class WeightGoalSection extends StatelessWidget {
     if (current == null) {
       return StatusCard(
         tr(c, 'Aktuelles Gewicht fehlt', 'Current weight missing'),
-        tr(c, 'Ohne dein aktuelles Gewicht gibt es keine Prognose.',
-            'Without your current weight there is no forecast.'),
+        '',
         fix: tr(c, 'Gewicht eintragen', 'Enter weight'),
         icon: LucideIcons.scale,
         onFix: onEdit,
@@ -201,21 +195,11 @@ class WeightGoalSection extends StatelessWidget {
         : balanceNeededBy(
             current: current, target: target, today: today, by: wish);
     final lines = <String>[
-      if (f == null)
+      if (f != null)
         tr(
             c,
-            'Für eine Prognose brauche ich entweder vollständig geloggte Tage '
-                '(Essen + Band ganztägig getragen) oder ein Tagesenergie-Ziel '
-                'oben bei "Deine Ziele".',
-            'A forecast needs either fully logged days (food logged and the '
-                'band worn all day) or a daily energy goal under "Your goals" above.')
-      else
-        tr(
-            c,
-            'Bilanz: ${_kcal(c, f.balance)}, ${f.source == BalanceSource.logged ? 'gegessen minus verbraucht' : 'dein Kalorienziel minus Verbrauch'} '
-                '(Ø ${f.days} ${f.days == 1 ? 'Tag' : 'Tage'}). Verbrauch = Grundumsatz + Aktivität vom Band.',
-            'Balance: ${_kcal(c, f.balance)}, ${f.source == BalanceSource.logged ? 'eaten minus burned' : 'your calorie goal minus burn'} '
-                '(avg of ${f.days} ${f.days == 1 ? 'day' : 'days'}). Burn = resting burn + activity from the band.'),
+            'Bilanz: ${_kcal(c, f.balance)} (Ø ${f.days} ${f.days == 1 ? 'Tag' : 'Tage'})',
+            'Balance: ${_kcal(c, f.balance)} (avg of ${f.days} ${f.days == 1 ? 'day' : 'days'})'),
       if (wish != null)
         needed == null
             ? tr(c, 'Dein Wunschdatum (${_date(c, wish)}) ist schon vorbei.',
@@ -226,8 +210,6 @@ class WeightGoalSection extends StatelessWidget {
                     '${f == null ? '' : ' (${reach != null && !reach.isAfter(wish) ? 'du liegst im Plan' : 'aktuell ${_kcal(c, f.balance)}'})'}.',
                 'To make your target date ${_date(c, wish)} you would need ${_kcal(c, needed)}'
                     '${f == null ? '' : ' (${reach != null && !reach.isAfter(wish) ? 'you are on track' : 'now ${_kcal(c, f.balance)}'})'}.'),
-      tr(c, 'Faustregel: 7.700 kcal ≈ 1 kg. Eine Schätzung, keine Garantie.',
-          'Rule of thumb: 7,700 kcal ≈ 1 kg. An estimate, not a promise.'),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -241,6 +223,7 @@ class WeightGoalSection extends StatelessWidget {
           C.teal,
           rateDown: target < current,
         ),
+        if (lines.isNotEmpty) ...[
         const SizedBox(height: S.x3),
         Surface(
           child: Column(
@@ -253,6 +236,7 @@ class WeightGoalSection extends StatelessWidget {
             ],
           ),
         ),
+        ],
       ],
     );
   }
@@ -454,18 +438,8 @@ class CreatineRow extends StatelessWidget {
           Icon(LucideIcons.pill, size: 18, color: p.on(C.purple)),
           const SizedBox(width: S.x3),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(tr(c, 'Creatin', 'Creatine'), style: F.body.copyWith(color: p.ink)),
-              Text(
-                taken
-                    ? tr(c, 'Heute genommen', 'Taken today')
-                    : tr(c, 'Erinnerung um 22 Uhr, falls offen',
-                        'Reminder at 10 pm if still open'),
-                style: F.over.copyWith(color: p.ink3),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ]),
+            child: Text(tr(c, 'Creatin', 'Creatine'),
+                style: F.body.copyWith(color: p.ink)),
           ),
           Container(
             width: S.tap,

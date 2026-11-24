@@ -18,9 +18,6 @@ const Map<String, String> kPrefsNotBackedUp = {
   'xp.workmode.on': 'work mode runs on this phone; a restore must not start it',
   'xp.workmode.since': 'start of this phone\'s work-mode session',
   'xp.workmode.last': 'last work-mode buzz on this phone',
-  // Edge+: the last place the weather was asked for, on this phone.
-  'plus.weather_lat': 'last coarse location of this phone',
-  'plus.weather_lon': 'last coarse location of this phone',
   'install_device_id': 'identifies this install; a restore must not clone it',
   'paired_remote_id': 'BLE address bonded to this phone; pair again',
   'paired_serial': 'identity mirror of the band paired to this phone',
@@ -109,14 +106,17 @@ class ImportSummary extends MapView<String, int> {
 /// table complete. Keys in [kPrefsNotBackedUp] need no entry.
 const Map<String, String> kPrefTypes = {
   'edgeplus.training_plans': 'string', // Edge+: the user's training plans
+  'edgeplus.meal_plan.v1': 'string', // Edge+: the week's meal plan
+  'edgeplus.shopping_checked.v1': 'string', // Edge+: ticked shopping items
+  'activity.goals': 'string', // Edge+: activity progress goals
+  'plus.fast_start': 'int', // Edge+: fasting timer start
+  'plus.fast_goal_h': 'int', // Edge+: fasting goal in hours
+  'plus.weather_lat': 'string', // Edge+: last weather location
+  'plus.weather_lon': 'string',
   // Edge+ experiments: JSON settings (goals, weekly plan, wake time).
   'xp.goals': 'string',
   'xp.weekplan': 'string',
   'xp.sleepplan': 'string',
-  'edgeplus.meal_plan.v1': 'string', // Edge+: the week's meal plan
-  'activity.goals': 'string', // Edge+: activity progress goals
-  'plus.fast_start': 'int', // Edge+: the running fast
-  'plus.fast_goal_h': 'int',
   'activity.nap_auto_log_since_sec': 'int',
   'ai.journal_done_day': 'string',
   'ai_evening_enabled': 'bool',

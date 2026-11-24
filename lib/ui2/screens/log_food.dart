@@ -44,6 +44,8 @@ import 'journal_compose.dart' show OsTextField;
 import 'log_workout.dart' show dayLabel;
 import 'food_ai_key_sheet.dart';
 import 'scan_barcode.dart';
+import 'recipes_screen.dart';
+import '../../data/meal_plan_store.dart';
 
 class LogFoodSheet extends StatefulWidget {
   const LogFoodSheet({super.key, this.date, this.meal = 'snack', this.entry});
@@ -297,6 +299,37 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   /// "850 kcal" used to arrive here as the same null as an empty field and the
   /// meal was written with the energy silently dropped.
   double? _num(TextEditingController t) => Typed.of(t.text).value;
+
+  // ── Edge+: recipes ──
+  Future<void> _pickRecipe() async {
+    final today = todayLabel();
+    final pick = await RecipePickerPage.open(context,
+        meal: _meal,
+        canEat: _date.compareTo(today) <= 0,
+        canPlan: _date.compareTo(today) >= 0);
+    if (pick == null || !mounted) return;
+    if (!pick.eat) {
+      MealPlanStore.add(_date, pick.toPlanned(_meal));
+      Navigator.of(context).pop(true);
+      return;
+    }
+    final n = pick.nutrients;
+    await _write(FoodEntry(
+      id: NutritionDb.newId(),
+      date: _date,
+      meal: _meal,
+      label: pick.name,
+      atTs: _atTs,
+      quantity: n == null ? null : pick.servings,
+      unit: 'Portion',
+      kcal: n?.kcal,
+      proteinG: n?.protein,
+      carbsG: n?.carbs,
+      fatG: n?.fat,
+      fibreG: n?.fibre,
+      confirmed: true,
+    ));
+  }
 
   // ── Edge+: the photo path ──────────────────────────────────────────────────
 
@@ -739,10 +772,18 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
                 LucideIcons.camera,
                 C.domFood,
                 tr(c, 'Foto vom Essen', 'Photo of the meal'),
-                sub: tr(c, 'KI schätzt die Nährwerte',
-                    'AI estimates the nutrition'),
                 chevron: false,
                 onTap: _estimating ? null : _takePhoto,
+              ),
+            ),
+            const SizedBox(height: S.x3),
+            Surface(
+              pad: const EdgeInsets.symmetric(horizontal: S.x4),
+              child: SetRow(
+                LucideIcons.chefHat,
+                C.domFood,
+                tr(c, 'Rezept', 'Recipe'),
+                onTap: _pickRecipe,
               ),
             ),
             ..._photoBlock(c),
@@ -1154,6 +1195,9 @@ class FoodRow extends StatelessWidget {
     final p = P.of(c);
     final l = AppLocalizations.of(c);
     final stacked = bigText(c);
+    // Edge+: only a source that is not the user's own gets a pill.
+    final showBadge = entry.source == FoodSource.barcode ||
+        entry.source == FoodSource.photo;
     final badge = Pill(
               switch (entry.source) {
                 FoodSource.barcode =>
@@ -1187,7 +1231,7 @@ class FoodRow extends StatelessWidget {
                     _detail(c, entry),
                     style: F.over.copyWith(color: p.ink3),
                   ),
-                  if (stacked) ...[const SizedBox(height: S.x1), badge],
+                  if (stacked && showBadge) ...[const SizedBox(height: S.x1), badge],
                 ],
               ),
             ),
@@ -1195,7 +1239,7 @@ class FoodRow extends StatelessWidget {
             // and a crowd-sourced record is not one. A barcode row says so by
             // name, which is also the ODbL credit at the point of display;
             // everything else here is the user's own.
-            if (!stacked) ...[const SizedBox(width: S.x2), badge],
+            if (!stacked && showBadge) ...[const SizedBox(width: S.x2), badge],
             if (trailing != null) ...[
               const SizedBox(width: S.x2),
               Icon(trailing, size: 20, color: p.on(C.domFood)),
