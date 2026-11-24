@@ -45,6 +45,7 @@ import '../ble/ble_state.dart'
     show AlarmConfirmation, AlarmEffect, BleUnavailableException, LiveStreamOwners;
 import '../ble/ios_ble_restore.dart';
 import '../ble/scale_presence.dart' show ScalePresenceWatcher;
+import '../oralb/oralb_watcher.dart' show OralBWatcher;
 import '../ble/session_link.dart' show SessionLink;
 import '../ble/colmi_link.dart' show ColmiLink;
 import '../ble/coros_link.dart' show CorosLink;
@@ -2192,6 +2193,7 @@ class AppState extends ChangeNotifier {
   void startScaleWatcher() {
     if (_disposed || !Platform.isAndroid) return;
     (_scaleWatcher ??= ScalePresenceWatcher()).start();
+    OralBWatcher.instance.start(); // Edge+: the toothbrush, same lifetime
   }
 
   /// Central disposal guard.
@@ -2212,6 +2214,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_scaleWatcher?.stop());
+    unawaited(OralBWatcher.instance.stop());
     _deriveCoordinator.cancelActivityReviewRetry();
     if (IosShortcutSync.foregroundSync == syncForShortcut) {
       IosShortcutSync.foregroundSync = null;

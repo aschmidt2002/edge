@@ -207,6 +207,8 @@ const _notComponents = {
   'RunInsightsCard', 'FastingCard',
   // Edge+ activity progress: reads strength_set and Prefs; the editor is a route.
   'ProgressSection', 'GoalEditor',
+  // Edge+ oral care: Scaffold routes that read Prefs and scan for the brush.
+  'DentalScreen', 'OralBConnectScreen',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
