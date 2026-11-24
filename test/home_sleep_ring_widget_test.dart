@@ -26,18 +26,14 @@ import 'package:openstrap_edge/ui2/ui2.dart';
 Finder _spokenCaption(String text) => find.byWidgetPredicate((widget) =>
     widget is Pressable && (widget.semanticLabel?.contains(text) ?? false));
 
-/// The caption is BOTH spoken in full and VISIBLE: as the full text, or as one
-/// of its measured compact wordings (which keep the default qualifier). Exactly one Text shows it.
+/// The caption is spoken in full. Edge+: it is not drawn any more, because
+/// the ring already shows the number.
 void _caption(String full, List<String> compact) {
   expect(_spokenCaption(full), findsOneWidget);
   expect(
       find.byWidgetPredicate(
-          (w) =>
-              w is Text &&
-              (w.data == full ||
-                  compact.contains(w.data))),
-      findsOneWidget,
-      reason: 'visible caption is neither "$full" nor one of $compact; texts: ${find.byType(Text).evaluate().map((e) => (e.widget as Text).data).toList()}');
+          (w) => w is Text && (w.data == full || compact.contains(w.data))),
+      findsNothing);
 }
 
 const _stages = SleepStageMin(deep: 70, rem: 95, light: 277, awake: 30);
@@ -231,7 +227,7 @@ void main() {
     testWidgets('a learned need is the target and is NOT labelled default',
         (t) async {
       await _pump(t, _slept(need: _min(462)));
-      expect(find.text('96% of 7h 42m'), findsOneWidget);
+      expect(_spokenCaption('96% of 7h 42m'), findsOneWidget);
       expect(find.textContaining('default'), findsNothing);
       final ring = _sleepPainter(t) as StageRing;
       expect(ring.arcs.first.fraction, closeTo(442 / 462 * 70 / 472, 1e-9));
@@ -298,7 +294,7 @@ void main() {
     testWidgets('scored night + learned need present: the "of" target is '
         'there AND the bar is filled', (t) async {
       await _pump(t, _slept(need: _min(462), stages: null));
-      expect(find.text('96% of 7h 42m'), findsOneWidget);
+      expect(_spokenCaption('96% of 7h 42m'), findsOneWidget);
       expect((_sleepPainter(t) as Ring).v, closeTo(442 / 462, 1e-9));
     });
 
