@@ -8,6 +8,12 @@ import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
+import '../data/day_label.dart' show todayLabel;
+import '../state/prefs.dart';
+
+const _kSpot = 'plus_weather_spot'; // "lat,lon" of the last fix
+const _kToday = 'plus_weather_today'; // {"day": …, "json": {…}}
+
 class TodayWeather {
   final double temp, feelsLike, min, max;
   final int code;
@@ -89,28 +95,25 @@ List<String> weatherHints(TodayWeather w, {bool de = true}) => [
       if (w.gustKmh >= 50) de ? 'Heute wird es windig.' : 'Windy today.',
     ];
 
-/// Today's weather here, or null when location or network say no.
+/// Today's weather here, or null when location or network say no. One
+/// request a day: the answer is kept for the rest of that day.
 Future<TodayWeather?> fetchTodayWeather() async {
+  final today = todayLabel();
   try {
-    if (!await Geolocator.isLocationServiceEnabled()) return null;
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
+    final kept = jsonDecode(Prefs.getString(_kToday, '{}'));
+    if (kept is Map && kept['day'] == today && kept['json'] is Map) {
+      final w = TodayWeather.fromOpenMeteo(
+          (kept['json'] as Map).cast<String, dynamic>());
+      if (w != null) return w;
     }
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
-      return null;
-    }
-    final pos = await Geolocator.getLastKnownPosition() ??
-        await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.low,
-              timeLimit: Duration(seconds: 10)),
-        );
+  } catch (_) {}
+  try {
+    final spot = await _spot();
+    if (spot == null) return null;
     // Two decimals (~1 km) is plenty for a forecast and sends no more.
     final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
-      'latitude': pos.latitude.toStringAsFixed(2),
-      'longitude': pos.longitude.toStringAsFixed(2),
+      'latitude': spot.$1.toStringAsFixed(2),
+      'longitude': spot.$2.toStringAsFixed(2),
       'current': 'temperature_2m,apparent_temperature,weather_code',
       'daily': 'temperature_2m_max,temperature_2m_min,'
           'precipitation_probability_max,precipitation_sum,snowfall_sum,'
@@ -121,8 +124,46 @@ Future<TodayWeather?> fetchTodayWeather() async {
     final r = await http.get(uri).timeout(const Duration(seconds: 10));
     if (r.statusCode != 200) return null;
     final j = jsonDecode(r.body);
-    return j is Map<String, dynamic> ? TodayWeather.fromOpenMeteo(j) : null;
+    if (j is! Map<String, dynamic>) return null;
+    final w = TodayWeather.fromOpenMeteo(j);
+    if (w != null) Prefs.setString(_kToday, jsonEncode({'day': today, 'json': j}));
+    return w;
   } catch (_) {
     return null;
+  }
+}
+
+/// Where to ask the forecast for: a fresh fix when the phone gives one,
+/// otherwise the last place it did. The fix used to be the only source, and
+/// a phone with no last known position and no fix inside 10 s (indoors, in
+/// the morning) got no weather at all.
+Future<(double, double)?> _spot() async {
+  (double, double)? kept;
+  final parts = Prefs.getString(_kSpot, '').split(',');
+  if (parts.length == 2) {
+    final lat = double.tryParse(parts[0]), lon = double.tryParse(parts[1]);
+    if (lat != null && lon != null) kept = (lat, lon);
+  }
+  try {
+    if (!await Geolocator.isLocationServiceEnabled()) return kept;
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
+      return kept;
+    }
+    final pos = await Geolocator.getLastKnownPosition() ??
+        await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 20)),
+        );
+    Prefs.setString(_kSpot,
+        '${pos.latitude.toStringAsFixed(2)},${pos.longitude.toStringAsFixed(2)}');
+    return (pos.latitude, pos.longitude);
+  } catch (_) {
+    return kept;
   }
 }

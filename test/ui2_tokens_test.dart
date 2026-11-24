@@ -201,7 +201,7 @@ const _notComponents = {
   // Home and Sleep carry it on every golden that matters.
   'TabHeader', 'BandStatusIcon',
   // Edge+ experiments: each reads the database or AppState on build.
-  'XpScreen', 'SleepPlannerCard', 'WorkModeTile', 'ExperimentalSection', 'GoalRings',
+  'XpScreen', 'SleepPlannerCard', 'WorkModeTile', 'ExperimentalSection', 'GoalRings', 'MorningWeather', 'FastingTile',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.

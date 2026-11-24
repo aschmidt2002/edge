@@ -197,3 +197,31 @@ class WeatherBox extends StatelessWidget {
     );
   }
 }
+
+/// Edge+: the morning's weather on Home, until noon. The check-in sheet
+/// shows it too, but that sheet comes once a day and only when Home opens
+/// from 04:00, so this is where the weather stays put for the morning.
+class MorningWeather extends StatefulWidget {
+  const MorningWeather({super.key});
+
+  @override
+  State<MorningWeather> createState() => _MorningWeatherState();
+}
+
+class _MorningWeatherState extends State<MorningWeather> {
+  final Future<TodayWeather?> _weather = fetchTodayWeather();
+
+  @override
+  Widget build(BuildContext c) {
+    if (DateTime.now().hour >= 12) return const SizedBox.shrink();
+    return FutureBuilder<TodayWeather?>(
+      future: _weather,
+      builder: (c, snap) => snap.data == null
+          ? const SizedBox.shrink()
+          : Padding(
+              padding: const EdgeInsets.only(bottom: S.x3),
+              child: WeatherBox(snap.data!),
+            ),
+    );
+  }
+}

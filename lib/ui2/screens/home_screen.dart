@@ -80,6 +80,7 @@ import 'metric_detail.dart';
 import 'readiness_detail.dart';
 import 'sleep_detail.dart';
 import 'health_screen.dart' show HealthScreen;
+import 'journal_prompt.dart' show MorningWeather;
 import '../../data/meal_plan_store.dart';
 import '../../notify/tap_router.dart' show kRouteWater;
 import '../experimental/xp_features.dart'
@@ -2575,6 +2576,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       // Edge+: Health lives under Home now.
       healthDoor(c, d),
       const SizedBox(height: S.x3),
+      if (isToday && widget.data == null) const MorningWeather(),
       if (bare) ...[
         const DetectedActivitiesCard(),
       ],

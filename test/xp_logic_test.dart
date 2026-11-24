@@ -19,4 +19,20 @@ void main() {
     expect(unfit.age, greaterThan(30));
     expect(bioAge(age: 30, female: false), isNull);
   });
+
+  test('recovery time grows with strain and with a low recovery', () {
+    expect(recoveryHours(0), 0);
+    expect(recoveryHours(21, recovery: 50), closeTo(72, 1e-9));
+    expect(recoveryHours(14), lessThan(recoveryHours(18)));
+    expect(recoveryHours(14, recovery: 30), greaterThan(recoveryHours(14, recovery: 90)));
+  });
+
+  test('race prediction follows Riegel from the fastest qualifying run', () {
+    // 5 km in 25:00 predicts 10 km at 25 min × 2^1.06.
+    final p = bestPrediction([(5000, 1500), (3000, 1200), (1000, 200)], 10000)!;
+    expect(p, closeTo(1500 * 2.0849, 1));
+    expect(bestPrediction([(1500, 400)], 5000), isNull);
+    expect(raceTime(3725), '1:02:05');
+    expect(raceTime(1500), '25:00');
+  });
 }
