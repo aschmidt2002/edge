@@ -264,6 +264,18 @@ Object? _comparable(Object? v) => switch (v) {
       _ => v,
     };
 
+/// Edge+: drop the keys the fork ADDS (the sleep score and the nightly stress
+/// it reads). Every original number stays pinned byte for byte; only these
+/// additive fields are not part of the upstream golden.
+Map<String, dynamic> _withoutEdgePlus(Map<String, dynamic> snap) {
+  for (final d in (snap['crossday_input'] as List?) ?? const []) {
+    if (d is Map) d.remove('stress');
+  }
+  final coach = (snap['crossday'] as Map?)?['sleep_coach'];
+  if (coach is Map) coach.remove('sleep_score');
+  return snap;
+}
+
 /// The first path where [a] and [b] differ, with both values, or null. A
 /// whole-snapshot string diff is megabytes, and CI truncates it.
 String? _firstDiff(Object? a, Object? b, String path) {
@@ -359,7 +371,7 @@ void main() {
               'America/New_York only; see the header.');
           return;
         }
-        final snap = await _snapshot(profile);
+        final snap = _withoutEdgePlus(await _snapshot(profile));
         final file = File('test/fixtures/whoop_freeze/${family}_$zone.json');
         if (Platform.environment['GENERATE_GOLDEN'] == '1') {
           file.parent.createSync(recursive: true);

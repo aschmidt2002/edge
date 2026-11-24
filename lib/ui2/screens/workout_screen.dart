@@ -34,15 +34,20 @@ import '../../state/app_state.dart';
 import '../../state/clock_format.dart' show formatClockOf;
 import '../../state/units_controller.dart';
 import '../../telemetry/telemetry_service.dart';
+import '../activity/run_insights.dart';
 import '../activity/catalogue.dart';
 import '../activity/day_strain.dart';
 import '../activity/live.dart';
 import '../activity/picker.dart';
+import '../activity/progress.dart' show ProgressSection;
 import '../activity/poster.dart' show PosterStatRow;
 import '../activity/setup.dart';
 import '../activity/summary.dart';
 import 'slot_scrub.dart';
 import '../charts.dart';
+import '../experimental/xp_features.dart'
+    show XpScreen, loadTrainingAdvice, loadWeekPlan;
+import '../../data/local_repository.dart' show kDefaultStepGoal;
 import '../profile/profile.dart' show ProfileAvatar, openProfile;
 import '../grammar.dart';
 import '../guides/help_entry.dart';
@@ -51,7 +56,7 @@ import '../plus_text.dart';
 import '../theme.dart';
 import '../../data/day_label.dart' show calendarDaysBetween;
 import 'log_workout.dart';
-import 'metric_detail.dart' show MetricDetail, detailLinkRow;
+import 'metric_detail.dart' show MetricDetail;
 import 'start_card.dart';
 import 'training_plans_screen.dart' show TrainingPlansScreen;
 
@@ -190,9 +195,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
     // The words the guides quote ("Start a session", "History") are the words
     // on these two controls, so a guide can point at either. History is a card
     // of its own, so a guide can dim the start card around it.
-    return Row(children: [
-      Expanded(
-        child: Surface(
+    return Surface(
           pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
           onTap: () => _openPicker(c, d),
           semanticLabel: loc?.workoutStartSessionLabel ?? 'Start a session',
@@ -211,29 +214,33 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
                   style: F.head.copyWith(color: p.ink)),
             ),
           ]),
+        );
+  }
+
+  /// History, as wide as its word, beside the week.
+  Widget _historyButton(BuildContext c) {
+    final p = P.of(c);
+    final loc = AppLocalizations.of(c);
+    return Pressable(
+      onTap: () => setState(() => tab = 2),
+      semanticLabel: loc?.workoutTabHistory ?? 'History',
+      child: GuideBox(
+        card: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x3),
+          decoration: BoxDecoration(
+              color: p.card, borderRadius: R.rLg, boxShadow: p.el(1)),
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(LucideIcons.history, size: 20, color: p.ink2),
+                const SizedBox(height: S.x1),
+                Text(loc?.workoutTabHistory ?? 'History',
+                    style: F.cap.copyWith(color: p.ink2)),
+              ]),
         ),
       ),
-      const SizedBox(width: S.x2),
-      // A Surface takes the full width; this card is as wide as its word.
-      Pressable(
-        onTap: () => setState(() => tab = 2),
-        semanticLabel: loc?.workoutTabHistory ?? 'History',
-        child: GuideBox(
-          card: true,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x3),
-            decoration: BoxDecoration(
-                color: p.card, borderRadius: R.rLg, boxShadow: p.el(1)),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(LucideIcons.history, size: 20, color: p.ink2),
-              const SizedBox(height: S.x1),
-              Text(loc?.workoutTabHistory ?? 'History',
-                  style: F.cap.copyWith(color: p.ink2)),
-            ]),
-          ),
-        ),
-      ),
-    ]);
+    );
   }
 
   /// "START A SESSION" → "Start a session": the label is an overline in caps.
@@ -254,6 +261,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);
     return [
+      // Edge+: the week first, History beside it, Start below.
+      IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: _weekStrip(c, d)),
+          const SizedBox(width: S.x2),
+          _historyButton(c),
+        ]),
+      ),
+      const SizedBox(height: S.x3),
       _startCard(c, d),
       const SizedBox(height: S.x3),
       Row(
@@ -271,71 +287,35 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           ],
         ],
       ),
-      // Edge+: training plans live under strength training.
+      const SizedBox(height: S.x3),
+      const RunInsightsCard(),
+      // Edge+: one heading for the doors. Steps draw their week; the numbers
+      // live one tap down.
       Section(
-        tr(c, 'Krafttraining', 'Strength training'),
-        detailLinkRow(
-            c,
-            LucideIcons.dumbbell,
-            tr(c, 'Trainingspläne', 'Training plans'),
-            tr(c, 'Plan starten und Fortschritt sehen',
-                'Start a plan and see your progress'),
-            () => Navigator.of(c).push(MaterialPageRoute<void>(
-                builder: (_) => TrainingPlansScreen(weightKg: d.weightKg)))),
-      ),
-      // Steps and food, which used to be a Home tile and a tab of their own.
-      // Doors, not cards: the numbers live one tap down.
-      Section(
-        loc?.homeSteps ?? 'Steps',
-        detailLinkRow(
-            c,
-            LucideIcons.footprints,
-            loc?.homeSteps ?? 'Steps',
-            loc?.activityStepsSub ?? 'Today and every day before it',
-            () => Navigator.of(c).push(MaterialPageRoute<void>(
-                builder: (_) => const MetricDetail('steps')))),
-      ),
-      Section(
-        loc?.workoutThisWeek ?? 'This week',
+        tr(c, 'Training', 'Training'),
         Surface(
-          child: Row(
-            children: List.generate(7, (i) {
-              final days = [
-                loc?.workoutWeekdayLetterMon ?? 'M',
-                loc?.workoutWeekdayLetterTue ?? 'T',
-                loc?.workoutWeekdayLetterWed ?? 'W',
-                loc?.workoutWeekdayLetterThu ?? 'T',
-                loc?.workoutWeekdayLetterFri ?? 'F',
-                loc?.workoutWeekdayLetterSat ?? 'S',
-                loc?.workoutWeekdayLetterSun ?? 'S',
-              ];
-              final today = DateTime.now().weekday - 1;
-              final done = d.weekDays.contains(i);
-              return Expanded(
-                child: Column(children: [
-                  Text(days[i], style: F.over.copyWith(color: p.ink3)),
-                  const SizedBox(height: S.x2),
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: done
-                            ? p.wash(C.green, strength: 1.5)
-                            : (i == today ? p.fill(C.purple) : p.card2)),
-                    child: Icon(
-                        done
-                            ? LucideIcons.check
-                            : (i == today ? LucideIcons.play : null),
-                        size: 14,
-                        color: done ? p.on(C.green) : p.inkOnFill),
-                  ),
-                ]),
-              );
-            }),
-          ),
+          pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x1),
+          child: Column(children: [
+            _stepsRow(c, d),
+            _doorRow(c, LucideIcons.dumbbell,
+                tr(c, 'Trainingspläne', 'Training plans'),
+                () => Navigator.of(c).push(MaterialPageRoute<void>(
+                    builder: (_) => TrainingPlansScreen(weightKg: d.weightKg)))),
+            _doorRow(c, LucideIcons.sparkles,
+                tr(c, 'Trainingsempfehlung', 'Training advice'),
+                () => Navigator.of(c).push(MaterialPageRoute<void>(
+                    builder: (_) => XpScreen(
+                        tr(c, 'Trainingsempfehlung', 'Training advice'),
+                        loadTrainingAdvice)))),
+            _doorRow(c, LucideIcons.calendarDays,
+                tr(c, 'Wochenplan', 'Weekly plan'),
+                () => Navigator.of(c).push(MaterialPageRoute<void>(
+                    builder: (_) => XpScreen(
+                        tr(c, 'Wochenplan', 'Weekly plan'), loadWeekPlan)))),
+          ]),
         ),
       ),
+      ProgressSection(ctl: d.load?.ctl, cardioMinWeek: d.cardioMinWeek),
       Section(
         loc?.workoutTrainingLoad ?? 'Training load',
         Column(children: [
@@ -367,6 +347,116 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
             .push(MaterialPageRoute(builder: (_) => const DayStrainDetail())),
       ),
     ];
+  }
+
+  Widget _weekStrip(BuildContext c, _WorkoutData d) {
+    final p = P.of(c);
+    final loc = AppLocalizations.of(c);
+    final days = [
+      loc?.workoutWeekdayLetterMon ?? 'M',
+      loc?.workoutWeekdayLetterTue ?? 'T',
+      loc?.workoutWeekdayLetterWed ?? 'W',
+      loc?.workoutWeekdayLetterThu ?? 'T',
+      loc?.workoutWeekdayLetterFri ?? 'F',
+      loc?.workoutWeekdayLetterSat ?? 'S',
+      loc?.workoutWeekdayLetterSun ?? 'S',
+    ];
+    final today = DateTime.now().weekday - 1;
+    return Surface(
+      pad: const EdgeInsets.symmetric(horizontal: S.x2, vertical: S.x3),
+      semanticLabel: loc?.workoutThisWeek ?? 'This week',
+      child: Row(
+        children: List.generate(7, (i) {
+          final done = d.weekDays.contains(i);
+          return Expanded(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(days[i], style: F.over.copyWith(color: p.ink3)),
+              const SizedBox(height: S.x2),
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: done
+                        ? p.wash(C.green, strength: 1.5)
+                        : (i == today ? p.fill(C.purple) : p.card2)),
+                child: Icon(
+                    done
+                        ? LucideIcons.check
+                        : (i == today ? LucideIcons.play : null),
+                    size: 13,
+                    color: done ? p.on(C.green) : p.inkOnFill),
+              ),
+            ]),
+          );
+        }),
+      ),
+    );
+  }
+
+  /// One plain door: icon, word, chevron.
+  Widget _doorRow(BuildContext c, IconData icon, String title, VoidCallback onTap) {
+    final p = P.of(c);
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: title,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: S.x3),
+        child: Row(children: [
+          Icon(icon, size: 18, color: p.ink2),
+          const SizedBox(width: S.x3),
+          Expanded(
+              child: Text(title,
+                  style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600))),
+          Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+        ]),
+      ),
+    );
+  }
+
+  /// Steps as their last seven days, today against the goal.
+  Widget _stepsRow(BuildContext c, _WorkoutData d) {
+    final p = P.of(c);
+    final loc = AppLocalizations.of(c);
+    final today = d.steps7.isEmpty ? null : d.steps7.last;
+    final goal = d.stepGoal.toDouble();
+    final top = [goal, for (final v in d.steps7) ?v].reduce(math.max);
+    final label = loc?.homeSteps ?? 'Steps';
+    return Pressable(
+      onTap: () => Navigator.of(c).push(MaterialPageRoute<void>(
+          builder: (_) => const MetricDetail('steps'))),
+      semanticLabel: label,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: S.x3),
+        child: Row(children: [
+          Icon(LucideIcons.footprints, size: 18, color: p.ink2),
+          const SizedBox(width: S.x3),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+            Text(
+                '${today == null ? '–' : today.round()} / ${d.stepGoal}',
+                style: F.cap.copyWith(color: p.ink3)),
+          ]),
+          const SizedBox(width: S.x4),
+          Expanded(
+            child: SizedBox(
+              height: 32,
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: Bars(d.steps7, p.on(C.green),
+                    highlight: 6,
+                    axis: AxisSpec(
+                        min: 0, max: top <= 0 ? 1 : top, format: (v) => '$v'),
+                    colorOf: (v) => v >= goal ? p.on(C.green) : p.on(C.teal)),
+              ),
+            ),
+          ),
+          const SizedBox(width: S.x2),
+          Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+        ]),
+      ),
+    );
   }
 
   /// Kilos moved per day over the same seven slots the TRIMP chart uses.
@@ -401,16 +491,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
                 for (var i = 6; i >= 0; i--)
                   _weekdayLetter(c, DateTime(end.year, end.month, end.day - i)),
               ],
-              footnote: (loc?.workoutTonnageFootnoteIntro ??
-                      'Reps × load over the sets you logged with a weight. ') +
-                  (d.tonnagePartial
-                      ? (loc?.workoutTonnageFootnotePartial ??
-                          'Sets logged without one are not in it, so '
-                              'this is a floor rather than a total. ')
-                      : '') +
-                  (loc?.workoutTonnageFootnoteOutro ??
-                      'Exact for what you typed and worthless across exercises — '
-                          'kept out of strain and recovery for that reason.'),
               series: d.tonnage7,
               child: scrub(CustomPaint(
                 size: Size.infinite,
@@ -457,10 +537,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
     if (d.load == null) {
       return StatusCard(
         loc?.workoutNoLoadTitle ?? 'No training load yet',
-        d.loadNote ??
-            (loc?.workoutNoLoadBody ??
-                'Fitness and fatigue are 42-day and 7-day averages. They need '
-                    'about two weeks of sessions.'),
+        // Edge+: only the countdown, no explainer.
+        d.loadNote ?? '',
         icon: LucideIcons.trendingUp,
       );
     }
@@ -490,7 +568,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           Builder(builder: (_) {
             final end = d.trimpEnd ?? DateTime.now();
             final axis = AxisSpec.of([for (final v in d.trimp7) ?v], floor: 0);
-            final days = d.trimp7.where((v) => v != null).length;
             final title = loc?.workoutDailyLoadTitle ?? 'Heart effort by day';
             final unit = loc?.workoutTrimpUnit ?? 'points';
             return SlotScrub(
@@ -515,14 +592,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
                         _weekdayLetter(
                             c, DateTime(end.year, end.month, end.day - i)),
                     ],
-                    footnote: (loc?.workoutDailyLoadFootnoteIntro ??
-                            'Heart points with no cap: minutes in each heart-rate zone, harder zones counting more. Strain reads the same heart rate on a 0–21 scale. ') +
-                        (days == 7
-                            ? (loc?.workoutDailyLoadAllDays ??
-                                'Last seven days.')
-                            : (loc?.workoutDailyLoadPartialDays(days) ??
-                                '$days of the last '
-                                    'seven days produced a figure.')),
                     series: d.trimp7,
                     child: scrub(CustomPaint(
                       size: Size.infinite,
@@ -2108,6 +2177,13 @@ class _WorkoutData {
   /// one — see health_import_state.dart for why the store cannot be asked.
   final DateTime? importedLast;
 
+  /// Steps per calendar day, the seven ending today.
+  final List<double?> steps7;
+  final int stepGoal;
+
+  /// Minutes of non-strength sessions since Monday.
+  final int cardioMinWeek;
+
   const _WorkoutData({
     this.weightKg,
     this.load,
@@ -2128,6 +2204,9 @@ class _WorkoutData {
     this.morningAfter = const [],
     this.suggestions = const [],
     this.importedLast,
+    this.steps7 = const [],
+    this.stepGoal = kDefaultStepGoal,
+    this.cardioMinWeek = 0,
   });
 
   const _WorkoutData.empty() : this();
@@ -2141,8 +2220,11 @@ Future<_WorkoutData> _loadWorkoutData(AppState app) async {
     if (repo == null) return const _WorkoutData.empty();
 
     double? weight;
+    var stepGoal = kDefaultStepGoal;
     try {
-      weight = (await repo.getProfile())['weight_kg'] as double?;
+      final profile = await repo.getProfile();
+      weight = profile['weight_kg'] as double?;
+      stepGoal = (profile['step_goal'] as num?)?.toInt() ?? kDefaultStepGoal;
     } catch (_) {
       weight = null;
     }
@@ -2191,6 +2273,16 @@ Future<_WorkoutData> _loadWorkoutData(AppState app) async {
     } catch (_) {
       trimp = List<double?>.filled(7, null);
     }
+
+    var steps7 = List<double?>.filled(7, null);
+    try {
+      steps7 = lastSevenDays((await repo.getChart('steps'))['points'], end);
+      // Today's count is live in getToday before the day derives.
+      final daily = (await repo.getToday())['daily'];
+      final live = daily is Map ? daily['steps'] : null;
+      final v = (live is Map ? live['value'] : live) as num?;
+      if (v != null) steps7[6] = v.toDouble();
+    } catch (_) {}
 
     // Not caught: a failed read of the session history has to reach the
     // retry card, not draw as "No sessions recorded yet".
@@ -2381,5 +2473,10 @@ Future<_WorkoutData> _loadWorkoutData(AppState app) async {
       morningAfter: morningAfter,
       suggestions: await activeSuggestions(repo),
       importedLast: await lastImportAt(HealthImport.workouts),
+      steps7: steps7,
+      stepGoal: stepGoal,
+      cardioMinWeek: thisWeek
+          .where((w) => w.activity.track != Track.sets)
+          .fold<int>(0, (a, w) => a + w.duration.inMinutes),
     );
 }

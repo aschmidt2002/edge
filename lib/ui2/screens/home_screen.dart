@@ -1432,6 +1432,18 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
         needMin: d.sleepNeedMin.value,
       );
       final target = hm(m.targetMin);
+      // Edge+: the four-part score is the ring when it exists; the stage arcs
+      // are rescaled to sweep exactly that share of the circle.
+      final score = d.sleepScore;
+      if (score != null) {
+        final f = m.sweep > 0 ? (score / 100) / m.sweep : 0.0;
+        return _RingState(k, label, LucideIcons.moon, C.blue,
+            value: '$score%',
+            sub: hm(m.asleepMin),
+            frac: (score / 100).clamp(0.0, 1.0),
+            arcs: [for (final a in m.arcs) SleepArc(a.kind, a.fraction * f)],
+            provisional: d.sleepProvisional);
+      }
       return _RingState(k, label, LucideIcons.moon, C.blue,
           value: hm(m.asleepMin),
           // The target is the learned need, or the 8 h default — and the
@@ -1833,6 +1845,11 @@ class HomeData {
   /// when the night is not today's or was not measured.
   final double? respRate, hrvMs, skinDevC, skinZ;
 
+  /// Edge+: today's four-part sleep score, 0–100 (`sleep_coach.sleep_score`).
+  /// Null on past days and when it could not be scored; the ring then falls
+  /// back to time asleep against need.
+  final int? sleepScore;
+
   const HomeData({
     this.name,
     this.dayId,
@@ -1861,6 +1878,7 @@ class HomeData {
     this.hrvMs,
     this.skinDevC,
     this.skinZ,
+    this.sleepScore,
   });
 
   /// The three illness fields, replaced together. Test-facing sugar, and they
@@ -1894,6 +1912,7 @@ class HomeData {
         hrvMs: hrvMs,
         skinDevC: skinDevC,
         skinZ: skinZ,
+        sleepScore: sleepScore,
       );
 
   /// A day OTHER than today, for the Home day switcher.
@@ -2052,6 +2071,9 @@ class HomeData {
       hrvMs: heldOver != null ? null : _num(today['hrv'], 'rmssd'),
       skinDevC: heldOver != null ? null : _num(today['skin_temp'], 'dev_c'),
       skinZ: heldOver != null ? null : _num(today['skin_temp'], 'value'),
+      sleepScore: heldOver != null || coach is! Map
+          ? null
+          : (envValue(coach['sleep_score'])?['score'] as num?)?.round(),
     );
   }
 
