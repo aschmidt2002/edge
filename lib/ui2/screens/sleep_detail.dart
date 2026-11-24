@@ -872,10 +872,8 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       ..._nav(_day ?? d.day, d.days, _goDay),
 
       // ── 1 · THE ANSWER ── total, when, and the user's say over the window.
-      _answer(c, p, d, n, [
-        ...?_windowCard(c, p, d, n),
-        ..._napsButton(c, l, d.day),
-      ]),
+      _answer(c, p, d, n,
+          _windowCard(c, p, d, n) ?? _napsButton(c, l, d.day)),
 
       // ── 2 · THE NIGHT ITSELF ── hypnogram, its shape and the stage split,
       // one card (Edge+: the Stages section was a second block of the same
@@ -971,34 +969,36 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
         : math.max(0, inBed - unobserved);
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Edge+: duration with "asleep of that" behind it, the clock times
+        // under it. In bed is the denominator of that share and was its own
+        // column; the share says it. On a night with a hole the share names
+        // the watched time it is out of instead.
         Wrap(
           spacing: S.x3,
           runSpacing: S.x1,
-          crossAxisAlignment: WrapCrossAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.end,
           children: [
             Semantics(
               label: l?.sleepDetailTotalSleep ?? 'Total sleep',
               child: Text(hm(tst), style: F.n48.copyWith(color: p.ink)),
             ),
-            if (from.isNotEmpty && to.isNotEmpty)
-              Text('$from – $to',
-                  style: F.body
-                      .copyWith(color: p.ink2, fontWeight: FontWeight.w600)),
+            if (eff != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: S.x2),
+                child: Text(
+                    watched == null
+                        ? tr(c, '${_pct(eff * 100)} geschlafen',
+                            '${_pct(eff * 100)} asleep')
+                        : tr(c,
+                            '${_pct(eff * 100)} von ${hm(watched)} erfasst',
+                            '${_pct(eff * 100)} of ${hm(watched)} watched'),
+                    style: F.body.copyWith(
+                        color: p.on(C.green), fontWeight: FontWeight.w600)),
+              ),
           ],
         ),
-        if (inBed != null || eff != null) ...[
-          const SizedBox(height: S.x3),
-          InlineMetrics([
-            if (inBed != null) (l?.sleepDetailInBed ?? 'IN BED', hm(inBed), C.indigo),
-            if (watched != null)
-              (l?.sleepDetailWatched ?? 'WATCHED', hm(watched), C.sky),
-            if (eff != null)
-              (watched == null
-                  ? (l?.sleepDetailAsleepOfThat ?? 'ASLEEP OF THAT')
-                  : (l?.sleepDetailAsleep ?? 'ASLEEP'),
-                  _pct(eff * 100), C.green),
-          ]),
-        ],
+        if (from.isNotEmpty && to.isNotEmpty)
+          Text('$from – $to', style: F.cap.copyWith(color: p.ink3)),
         if (d.isLatestNight && d.score != null)
           ?_sleepScore(c, p, d.score!),
         ...controls,
@@ -1103,19 +1103,36 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
   /// still renders on a day with no scored main-sleep window (worn all day,
   /// off overnight, or a night the user rejected outright).
   List<Widget> _napsButton(BuildContext c, AppLocalizations? l, String? day) {
-    if (day == null) return const [];
-    return [
-      const SizedBox(height: S.x2),
-      GuideBox(child: TextButton(
-        // `_loading` too: `_goDay` swaps `_day` and keeps the old `_d` on
-        // screen until `_load()` resolves, so a tap in that window would
-        // open naps for the day you just navigated away from.
-        onPressed:
-            _saving || _loading ? null : () => go(c, NapsScreen(day: day)),
-        child: Text(l?.sleepDetailEditNaps ?? 'Naps'),
-      )),
-    ];
+    final b = _napsTextButton(c, l, day);
+    return b == null ? const [] : [const SizedBox(height: S.x2), b];
   }
+
+  Widget? _napsTextButton(BuildContext c, AppLocalizations? l, String? day,
+      {ButtonStyle? style}) {
+    if (day == null) return null;
+    return GuideBox(child: TextButton(
+      style: style,
+      // `_loading` too: `_goDay` swaps `_day` and keeps the old `_d` on
+      // screen until `_load()` resolves, so a tap in that window would
+      // open naps for the day you just navigated away from.
+      onPressed:
+          _saving || _loading ? null : () => go(c, NapsScreen(day: day)),
+      child: Text(l?.sleepDetailEditNaps ?? 'Naps', textAlign: TextAlign.center),
+    ));
+  }
+
+  /// Edge+: the night's actions on ONE line, equal thirds; wrapped only at
+  /// big text, where a third of the card cannot hold a word.
+  Widget _actionRow(BuildContext c, List<Widget> buttons) {
+    if (bigText(c)) return Wrap(spacing: S.x1, children: buttons);
+    return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+      for (final b in buttons) Expanded(child: b),
+    ]);
+  }
+
+  static ButtonStyle _compact(BuildContext c) => TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: S.x1, vertical: S.x2),
+      visualDensity: VisualDensity.compact);
 
   List<Widget>? _windowCard(
       BuildContext c, P p, SleepData d, Map<String, dynamic> n) {
@@ -1147,8 +1164,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
                 ? (l?.sleepDetailStagedByRing ?? 'Staged by your device')
                 : null;
     return [
-      const SizedBox(height: S.x3),
-      Divider(color: p.line, height: 1),
+      const SizedBox(height: S.x2),
       if (tag != null) ...[
         const SizedBox(height: S.x3),
         Row(children: [
@@ -1179,33 +1195,45 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       const SizedBox(height: S.x1),
       // No buttons when uncorrectable; the note says why: pruned
       // recordings, or (imported, never worn) nothing to re-analyse.
-      if (!_correctable)
-        _recordingsPruned ? _uncorrectableNote(c, l) : _noRecordingsNote(c, l)
-      else
-        Wrap(spacing: S.x1, children: [
+      if (!_correctable) ...[
+        _recordingsPruned ? _uncorrectableNote(c, l) : _noRecordingsNote(c, l),
+        // Naps are their own table and stay editable.
+        ..._napsButton(c, l, day),
+      ] else
+        _actionRow(c, [
           if (fallback && _confirmable)
             TextButton(
+              style: _compact(c),
               onPressed: locked ? null : () => _confirmWindow(day),
-              child: Text(l?.sleepDetailConfirmTimes ?? 'These times are right'),
+              child: Text(l?.sleepDetailConfirmTimes ?? 'These times are right',
+                  textAlign: TextAlign.center),
             ),
           TextButton(
+            style: _compact(c),
             onPressed: locked ? null : () => _editWindow(day, t0, t1),
-            child: Text(mine
-                ? (l?.sleepDetailChangeTimes ?? 'Change the times')
-                : (l?.sleepDetailSetTimesMyself ?? 'Set the times myself')),
+            child: Text(
+                mine
+                    ? (l?.sleepDetailChangeTimes ?? 'Change the times')
+                    : (l?.sleepDetailSetTimesMyself ?? 'Set the times myself'),
+                textAlign: TextAlign.center),
           ),
           if (mine && _wholeNightKept)
             TextButton(
+              style: _compact(c),
               onPressed: locked ? null : () => _clearWindow(day),
-              child: Text(l?.sleepDetailBackToAutomatic ?? 'Back to automatic'),
+              child: Text(l?.sleepDetailBackToAutomatic ?? 'Back to automatic',
+                  textAlign: TextAlign.center),
             ),
           // The missing third answer next to "Looks right"/"Edit": naps
           // already have a reject action (sleep_nap source='rejected');
           // a whole-night main-sleep session didn't (edge#248).
           TextButton(
+            style: _compact(c),
             onPressed: locked ? null : () => _rejectWindow(day),
-            child: Text(l?.sleepDetailNotSleep ?? 'Not sleep'),
+            child: Text(l?.sleepDetailNotSleep ?? 'Not sleep',
+                textAlign: TextAlign.center),
           ),
+          ?_napsTextButton(c, l, day, style: _compact(c)),
         ]),
       if (_correctable && !_wholeNightKept) _eveningPrunedNote(c, l),
       if (busy)
@@ -1453,8 +1481,6 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     }
     final t0 = (n['onset_ts'] as num?)?.round();
     final t1 = (n['wake_ts'] as num?)?.round();
-    final cycles = (n['cycle_count'] as num?)?.toInt() ?? 0;
-    final mean = n['cycles_mean_min'] as num?;
     // One lane per stage, tall enough for its own name at any text size.
     final scaler = MediaQuery.textScalerOf(c);
     final lane = math.max(33.0, scaler.scale(F.over.fontSize!) * F.over.height! + 8);
@@ -1465,9 +1491,6 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     // The wake-up count is a FLOOR — our stager sees sustained wake of 5 min
     // or more, never the 3-15 s arousals a PSG counts — so it reads "≥ n".
     final shape = <(String, String, Color)>[
-      if (cycles > 0)
-        (tr(c, 'ZYKLEN', 'CYCLES'),
-            mean == null ? '$cycles' : '$cycles · ${hm(mean)}', C.purple),
       if (w != null) (tr(c, 'AUFGEWACHT', 'WAKE-UPS'), w == 0 ? '0' : '≥ $w', C.orange),
       if (longest != null) (tr(c, 'AM STÜCK', 'LONGEST'), hm(longest), C.blue),
     ];
@@ -1763,21 +1786,14 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     final (known, stage) = SleepData.stageAt(n, t);
     final pigment = stage == null ? null : Hypnogram.pigment[stage];
     final stageInk = pigment == null ? null : p.on(pigment);
-    String sentence(String s) =>
-        s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
-    final cells = <ChartPanelCell>[
-      if (known)
-        ChartPanelCell(sentence(l?.sleepDetailUnitStage ?? 'stage'),
-            color: stageInk,
-            // A hole has no pigment; it keeps the swatch's width all the same.
-            reserveSwatch: true,
-            value: stage == null
-                ? (l?.sleepDetailNotMeasuredCap ?? 'Not measured')
-                : _stageName(c, stage),
-            valueColor: stageInk ?? p.ink2),
-      ..._signalCells(c, p, d, t),
-    ];
-    if (cells.isEmpty) return const SizedBox.shrink();
+    // Edge+: the stage IS the caption ("Deep sleep · 03:15"), not a cell
+    // under a SELECTED caption, so the panel is one line shorter.
+    final cells = _signalCells(c, p, d, t);
+    final notMeasured = l?.sleepDetailNotMeasuredCap ?? 'Not measured';
+    final title = known
+        ? (stage == null ? notMeasured : _stageName(c, stage))
+        : null;
+    if (cells.isEmpty && title == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: S.x3),
       child: ChartPanel(
@@ -1791,6 +1807,11 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
         scrubbed: scrubbed,
         color: stageInk ?? p.ink2,
         cells: cells,
+        title: title,
+        titleSpan: [
+          for (final st in SleepStage.values) _stageName(c, st),
+          notMeasured,
+        ],
       ),
     );
   }
@@ -1934,31 +1955,40 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       BuildContext c, P p, Map<SleepStage, String> totals) {
     final l = AppLocalizations.of(c);
     final ink = Hypnogram.cols(p);
-    return Wrap(spacing: S.x4, runSpacing: S.x2, children: [
-      for (final s in const [
-        SleepStage.deep,
-        SleepStage.rem,
-        SleepStage.light,
-        SleepStage.awake,
-      ])
-        if (totals[s] case final v?)
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-                width: 8,
-                height: 8,
-                decoration:
-                    BoxDecoration(color: ink[s], shape: BoxShape.circle)),
-            const SizedBox(width: S.x2),
-            Flexible(
-                child: Text(s.label(l),
-                    style: F.cap.copyWith(color: p.ink2))),
-            const SizedBox(width: S.x1),
-            Flexible(
-              child: Text(v,
-                  style: F.cap
-                      .copyWith(color: p.ink, fontWeight: FontWeight.w600)),
-            ),
-          ]),
+    // Edge+: two fixed columns, so REM sits right above Awake and every
+    // swatch lines up under the one above it, whatever each figure's width.
+    Widget entry(SleepStage s) {
+      final v = totals[s];
+      if (v == null) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: S.x1),
+        child: Row(children: [
+          Container(
+              width: 8,
+              height: 8,
+              decoration:
+                  BoxDecoration(color: ink[s], shape: BoxShape.circle)),
+          const SizedBox(width: S.x2),
+          Flexible(
+              child: Text(s.label(l), style: F.cap.copyWith(color: p.ink2))),
+          const SizedBox(width: S.x1),
+          Flexible(
+            child: Text(v,
+                style:
+                    F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+      );
+    }
+
+    Widget column(List<SleepStage> st) => Expanded(
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [for (final s in st) entry(s)]));
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      column(const [SleepStage.deep, SleepStage.light]),
+      const SizedBox(width: S.x3),
+      column(const [SleepStage.rem, SleepStage.awake]),
     ]);
   }
 
