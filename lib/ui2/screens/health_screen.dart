@@ -29,6 +29,7 @@ import '../ui2.dart';
 import 'advanced.dart';
 import 'ecg.dart' show EcgEntryCard, pairedIsMaverickOf;
 import 'dental_screen.dart' show DentalScreen;
+import 'screen_time_screen.dart' show ScreenTimeScreen;
 import 'findings_log.dart';
 import 'slot_scrub.dart';
 import 'home_screen.dart';
@@ -1006,6 +1007,17 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
             tr(c, 'Zahnhygiene', 'Oral care'),
             tr(c, 'Putzdauer, 2× täglich, Druck', 'Brushing time, twice a day, pressure'),
             () => go(c, const DentalScreen())),
+      ),
+
+      // Edge+: Digital Wellbeing's screen time against mood.
+      Section(
+        tr(c, 'Bildschirmzeit', 'Screen time'),
+        detailLinkRow(
+            c,
+            LucideIcons.smartphone,
+            tr(c, 'Bildschirmzeit', 'Screen time'),
+            tr(c, 'Apps, Entsperrungen, Stimmung', 'Apps, unlocks, mood'),
+            () => go(c, const ScreenTimeScreen())),
       ),
 
       // THERE IS NO "BODY COMPOSITION" SECTION, AND THE NEXT PERSON SHOULD NOT

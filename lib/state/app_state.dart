@@ -46,6 +46,7 @@ import '../ble/ble_state.dart'
 import '../ble/ios_ble_restore.dart';
 import '../ble/scale_presence.dart' show ScalePresenceWatcher;
 import '../oralb/oralb_watcher.dart' show OralBWatcher;
+import '../screentime/screen_time.dart' show ScreenTime;
 import '../ble/session_link.dart' show SessionLink;
 import '../ble/colmi_link.dart' show ColmiLink;
 import '../ble/coros_link.dart' show CorosLink;
@@ -2194,6 +2195,7 @@ class AppState extends ChangeNotifier {
     if (_disposed || !Platform.isAndroid) return;
     (_scaleWatcher ??= ScalePresenceWatcher()).start();
     OralBWatcher.instance.start(); // Edge+: the toothbrush, same lifetime
+    if (ScreenTime.connected) unawaited(ScreenTime.refresh()); // Edge+
   }
 
   /// Central disposal guard.

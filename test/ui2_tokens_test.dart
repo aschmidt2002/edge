@@ -209,12 +209,15 @@ const _notComponents = {
   'ProgressSection', 'GoalEditor',
   // Edge+ oral care: Scaffold routes that read Prefs and scan for the brush.
   'DentalScreen', 'OralBConnectScreen',
+  // Edge+ screen time: a Scaffold route that reads Prefs and the journal.
+  'ScreenTimeScreen',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
   'TrainingPlansScreen', 'TrainingPlanEditor', 'TrainingPlanProgress',
   // Edge+ recipes: Scaffold routes that pop a pick or read the week plan.
   'RecipePickerPage', 'RecipeDetailPage', 'ShoppingListPage',
+  'RecipeEditorPage',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to

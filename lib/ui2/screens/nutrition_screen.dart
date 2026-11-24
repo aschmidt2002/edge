@@ -409,17 +409,6 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
     final day = _dayRollup;
     final days = _weekDays;
     final plans = {for (final d in days) d: MealPlanStore.forDay(d)};
-    double? sum(Iterable<double?> xs) {
-      final known = xs.whereType<double>();
-      return known.isEmpty ? null : known.reduce((a, b) => a + b);
-    }
-
-    final bars = <double?>[
-      for (final d in days)
-        (_weekEntries[d]?.isNotEmpty ?? false)
-            ? sum(_weekEntries[d]!.map((e) => e.kcal))
-            : sum(plans[d]!.map((m) => m.kcal)),
-    ];
     final planned = plans[_day] ?? const <PlannedMeal>[];
     Widget smallButton(IconData icon, String label, VoidCallback onTap) =>
         Expanded(
@@ -450,10 +439,9 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
                 days: days,
                 today: _date,
                 selected: _day,
-                bars: bars,
-                logged: {
+                planned: {
                   for (final d in days)
-                    if (_weekEntries[d]?.isNotEmpty ?? false) d,
+                    if (plans[d]!.isNotEmpty) d,
                 },
                 onPick: (d) => setState(() => _picked = d == _date ? null : d),
                 onShift: (dir) {
@@ -467,24 +455,24 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
             ),
           ),
           const SizedBox(width: S.x2),
-          Pressable(
+          // The same card as the week, as tall as it.
+          SizedBox(
+            width: 76,
+            child: Surface(
+            pad: const EdgeInsets.symmetric(horizontal: S.x2, vertical: S.x3),
             onTap: () => setState(() => _tab = 1),
             semanticLabel: tr(c, 'Verlauf', 'History'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: S.x3),
-              decoration: BoxDecoration(
-                  color: p.card, borderRadius: R.rLg, boxShadow: p.el(1)),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.history, size: 20, color: p.ink2),
-                    const SizedBox(height: S.x1),
-                    Text(tr(c, 'Verlauf', 'History'),
-                        style: F.cap.copyWith(color: p.ink2)),
-                  ]),
-            ),
-          ),
+            child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.history, size: 20, color: p.ink2),
+                  const SizedBox(height: S.x1),
+                  Text(tr(c, 'Verlauf', 'History'),
+                      style: F.cap.copyWith(color: p.ink2),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ]),
+          )),
         ])),
         const SizedBox(height: S.x3),
         Row(children: [
@@ -516,14 +504,6 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
                       ? tr(c, 'Mahlzeiten', 'Meals')
                       : _dayShort(_day, AppLocalizations.of(c)),
                   style: F.head.copyWith(color: p.ink)),
-            ),
-            Pressable(
-              semanticLabel: AppLocalizations.of(c)?.nutritionLogFood ?? 'Log food',
-              onTap: () => _logFood(meal: _defaultMeal()),
-              child: Padding(
-                padding: const EdgeInsets.all(S.x1),
-                child: Icon(LucideIcons.plus, size: 22, color: p.on(C.domFood)),
-              ),
             ),
           ]),
         ),
@@ -629,11 +609,7 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
     );
   }
 
-  /// The meal the header's + opens on, from the clock.
-  static String _defaultMeal() {
-    final h = DateTime.now().hour;
-    return h < 11 ? 'breakfast' : h < 15 ? 'lunch' : h < 18 ? 'snack' : 'dinner';
-  }
+
 
   // ── WEEK ─────────────────────────────────────────────────────────────────
 
@@ -1321,24 +1297,21 @@ class _PlannedRow extends StatelessWidget {
   }
 }
 
-/// Edge+: the week calendar at the top of the tab. Seven days, Monday first,
-/// each with a small bar: eaten energy for a logged day, planned energy for
-/// the rest (paler). Chevrons move a week.
+/// Edge+: the week calendar at the top of the tab. Seven days, Monday first;
+/// a day with something planned has its number in green. Chevrons move a week.
 class _WeekStrip extends StatelessWidget {
   const _WeekStrip({
     required this.days,
     required this.today,
     required this.selected,
-    required this.bars,
-    required this.logged,
+    required this.planned,
     required this.onPick,
     required this.onShift,
   });
 
   final List<String> days;
   final String today, selected;
-  final List<double?> bars;
-  final Set<String> logged;
+  final Set<String> planned;
   final ValueChanged<String> onPick;
   final ValueChanged<int> onShift;
 
@@ -1350,7 +1323,6 @@ class _WeekStrip extends StatelessWidget {
     final p = P.of(c);
     final letters =
         Localizations.localeOf(c).languageCode == 'de' ? _de : _en;
-    final top = bars.whereType<double>().fold<double>(0, (a, b) => b > a ? b : a);
     Widget chevron(IconData i, int dir) => Pressable(
           onTap: () => onShift(dir),
           semanticLabel: dir < 0
@@ -1358,7 +1330,7 @@ class _WeekStrip extends StatelessWidget {
               : tr(c, 'Nächste Woche', 'Next week'),
           child: SizedBox(
             width: 20,
-            height: 64,
+            height: 48,
             child: Icon(i, size: 16, color: p.ink3),
           ),
         );
@@ -1378,7 +1350,9 @@ class _WeekStrip extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: days[i] == selected ? p.fill(C.domFood) : null,
+                  color: days[i] == selected
+                      ? p.fill(planned.contains(days[i]) ? C.green : C.domFood)
+                      : null,
                   border: days[i] == today && days[i] != selected
                       ? Border.all(color: p.on(C.domFood), width: 1.5)
                       : null,
@@ -1386,27 +1360,14 @@ class _WeekStrip extends StatelessWidget {
                 child: Text(
                   '${DateTime.parse(days[i]).day}',
                   style: F.cap.copyWith(
-                    color: days[i] == selected ? p.inkOnFill : p.ink,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: S.x1),
-              SizedBox(
-                height: 18,
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    width: 6,
-                    height: bars[i] == null || top <= 0
-                        ? 0
-                        : (18 * bars[i]! / top).clamp(3, 18).toDouble(),
-                    decoration: BoxDecoration(
-                      color: logged.contains(days[i])
-                          ? p.on(C.domFood)
-                          : p.wash(C.domFood),
-                      borderRadius: R.rPill,
-                    ),
+                    color: days[i] == selected
+                        ? p.inkOnFill
+                        : planned.contains(days[i])
+                            ? p.on(C.green)
+                            : p.ink,
+                    fontWeight: planned.contains(days[i])
+                        ? FontWeight.w800
+                        : FontWeight.w600,
                   ),
                 ),
               ),

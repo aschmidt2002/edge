@@ -74,6 +74,27 @@ void main() {
     expect(MealPlanStore.forDay(day), isEmpty);
   });
 
+  test('a custom recipe is stored and lands on the shopping list', () async {
+    SharedPreferences.setMockInitialValues({});
+    await Prefs.reload();
+    const r = Recipe(
+      id: 'u1',
+      name: 'Mein Gulasch',
+      meals: ['dinner'],
+      servings: 2,
+      minutes: 0,
+      items: [RecipeItem('rinderhack', 400), RecipeItem('zwiebel', 160)],
+      steps: ['Kochen.'],
+    );
+    CustomRecipes.put(r);
+    expect(recipeById('u1')!.name, 'Mein Gulasch');
+    expect(allRecipes().first.id, 'u1');
+    final list = shoppingList([(recipeById('u1')!, 1)]);
+    expect(list[Aisle.meat]!.single.g, 200);
+    CustomRecipes.delete('u1');
+    expect(recipeById('u1'), isNull);
+  });
+
   group('on the tab', () {
     setUpAll(() {
       sqfliteFfiInit();
