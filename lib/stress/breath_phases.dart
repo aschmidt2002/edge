@@ -140,6 +140,28 @@ const kBreathPatterns = <BreathPattern>[
       BreathPhase(BreathPhaseKind.exhale, 8),
     ],
   ),
+  // Edge+: two more for falling asleep. Cyclic sighing is what lowered arousal
+  // most in Balban et al. 2023 (Cell Reports Medicine, five minutes a day).
+  BreathPattern(
+    key: 'cyclic_sigh',
+    label: 'Cyclic sighing',
+    description: 'Two breaths in through the nose, deep then a short top-up, '
+        'and a long breath out through the mouth.',
+    phases: [
+      BreathPhase(BreathPhaseKind.inhale, 3),
+      BreathPhase(BreathPhaseKind.exhale, 6),
+    ],
+  ),
+  BreathPattern(
+    key: 'humming',
+    label: 'Humming bee',
+    description: 'Hum quietly on every breath out. Slow, and it gives your '
+        'head something to do.',
+    phases: [
+      BreathPhase(BreathPhaseKind.inhale, 4),
+      BreathPhase(BreathPhaseKind.exhale, 10),
+    ],
+  ),
 ];
 
 final Map<String, BreathPattern> kBreathPatternsByKey = {

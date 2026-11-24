@@ -82,6 +82,7 @@ import '../data/med_store.dart' show MedDb, MedDef;
 import '../data/auto_backup.dart'
     show BackupCadence, BackupOutcome, BackupFolder, AndroidBackupStorage, runBackup;
 import '../stress/breath_phases.dart';
+import '../stress/winddown_log.dart';
 // `runBackupIfDue` is also the name of the AppState method below, so the pure
 // scheduler is imported under an alias rather than shadowed by it.
 import '../data/auto_backup.dart' as backup
@@ -6479,6 +6480,10 @@ class AppState extends ChangeNotifier {
   //
   // Only the two quiet windows are stored. The paced block's own RMSSD is not
   // computed here and has nowhere to go — see `lib/stress/session_effect.dart`.
+
+  /// Edge+: the last session's before/after (see lib/stress/winddown_log.dart).
+  WinddownEntry? get lastWinddownComparison =>
+      _breathingController.lastComparison;
 
   /// True while a quiet window is capturing outside the paced block.
   bool get breathingWindowOpen => _breathingController.breathingWindowOpen;

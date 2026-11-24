@@ -29,9 +29,7 @@ import '../../data/med_store.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/metric.dart' show whyFromNote;
 import '../../state/app_state.dart';
-import '../../stress/breath_phases.dart';
 import '../ui2.dart';
-import 'calm_breathing.dart';
 import 'driver_breakdown.dart';
 import 'cycle_screen.dart';
 import 'home_screen.dart'
@@ -123,7 +121,6 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
   List<JournalFieldSpec> _habits = const [];
   List<JournalFieldSpec> _fields = const [];
   Map<String, Map<String, JournalMetricValue>> _habitHistory = const {};
-  List<Map<String, dynamic>> _breathing = const [];
   List<MedDef> _meds = const [];
   List<MedSlot> _slots = const [];
   ({int taken, int of}) _adherence = (taken: 0, of: 0);
@@ -180,7 +177,6 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
       final meds = await MedDb.defs(db);
       final doses = await MedDb.dosesForDay(db, _date);
       final adherence = await MedDb.adherenceWindow(db, days: 7);
-      final breathing = await app.breathingHistory(limit: 5);
 
       var stress = const <String, dynamic>{};
       var insights = const <String, dynamic>{};
@@ -230,7 +226,6 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
         _meds = meds;
         _slots = slotsForDay(meds, _date, doses, now: DateTime.now());
         _adherence = adherence;
-        _breathing = breathing;
         _stress = stress;
         _insights = insights;
         _drivers = driverRows;
@@ -274,7 +269,6 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
       if (_loading) return const Center(child: CircularProgressIndicator());
       return _failed ? _loadFailed(l) : _recovery(c);
     }
-    final last = _breathing.isEmpty ? null : _breathing.first;
     // `select`, not `watch`: AppState ticks at ~1 Hz during a live session and
     // this screen only cares about the one bool.
     final showCycle =
@@ -317,51 +311,8 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
           else if (_failed)
             _loadFailed(l)
           else ...[
-            // Mind is the only tab here with something to START. The other
-            // four are logs and reviews, and a "begin" card over a medication
-            // list would be an invitation to nothing.
-            if (tab == 0) ...[
-              StartCard(
-                label: l?.wellnessStartASitting ?? 'START A SITTING',
-                // What the picker actually offers. Three, not the number of
-                // things on this tab.
-                count: kBreathPatterns.length,
-                noun: l?.wellnessExercisesNoun ?? 'exercises',
-                sub: last == null
-                    ? (l?.wellnessPickOneAndGo ?? 'Pick one and go')
-                    : (l?.wellnessLastMinutes(
-                            (_reading(last['seconds']) ?? 0) ~/ 60) ??
-                        'Last: ${(_reading(last['seconds']) ?? 0) ~/ 60} min'),
-                asset: 'mascot_wellness.png',
-                accent: C.domMind,
-                deep: C.teal,
-                // Sized so the CHARACTER matches Workout's, not the frame.
-                // Two corrections got us here: the asset carried ~30%
-                // transparent padding (cropped away), and what is left still
-                // has a soft halo above the head, so the figure is 87% of the
-                // frame height where the workout mascot is 100% of its own.
-                // 145 x 0.87 puts the character at ~126, the same as Workout.
-                // Not cropped tighter than this on purpose — the halo is nearly
-                // opaque, so trimming it slices a hard arc through the artwork.
-                // The 118 here was originally compensating for
-                // ~30% transparent padding baked into the asset, which made
-                // the art render a third smaller than the workout one at the
-                // same height. The asset is cropped to its own alpha bounds,
-                // so the height is the art's height and the two mascots read
-                // as the same size. Still slightly wider than tall (1.03 vs
-                // 0.93), and at 126 that is 130 px — narrower than the padded
-                // asset was, so the copy has more room than before, not less.
-                mascotHeight: 145,
-                onTap: () async {
-                  await Navigator.of(c).push(
-                    MaterialPageRoute<void>(
-                        builder: (_) => const CalmBreathing()),
-                  );
-                  await _load();
-                },
-              ),
-              const SizedBox(height: S.x4),
-            ],
+            // Edge+: the breathing card that stood here moved to Sleep →
+            // Einschlafen, next to the sleep sounds.
             [_mind, _recovery, _habitsTab, _medication, _cycle][tab](c),
           ],
         ])

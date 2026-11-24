@@ -24,6 +24,7 @@ import '../../models/metric.dart';
 import '../../state/app_state.dart';
 import '../../stress/breath_phases.dart';
 import '../../stress/session_effect.dart';
+import '../../stress/winddown_log.dart';
 import '../ui2.dart';
 
 /// Session lengths offered, in minutes. Converted to whole pattern cycles so
@@ -97,7 +98,27 @@ List<BreathPattern> localizedBreathPatterns([AppLocalizations? l]) {
           l?.breathPatternExtendedExhaleDesc ?? extendedExhale.description,
       phases: extendedExhale.phases,
     ),
+    // Edge+: the fork's patterns speak German and English only.
+    for (final key in const ['cyclic_sigh', 'humming'])
+      _plusPattern(kBreathPatternsByKey[key]!, l),
   ];
+}
+
+BreathPattern _plusPattern(BreathPattern b, AppLocalizations? l) {
+  if (l?.localeName.startsWith('de') != true) return b;
+  final (label, description) = switch (b.key) {
+    'cyclic_sigh' => (
+        'Zyklisches Seufzen',
+        'Zweimal durch die Nase ein, tief und dann kurz nachziehen, und lange '
+            'durch den Mund aus.',
+      ),
+    _ => (
+        'Summende Biene',
+        'Beim Ausatmen leise summen. Langsam, und der Kopf hat etwas zu tun.',
+      ),
+  };
+  return BreathPattern(
+      key: b.key, label: label, description: description, phases: b.phases);
 }
 
 /// The instruction shown on the breathing ring for [kind], localized.
@@ -205,7 +226,6 @@ class _CalmBreathingState extends State<CalmBreathing>
   Duration _elapsed = Duration.zero;
   BreathPattern _pattern = kBreathPatterns.first;
   int _minutes = 5;
-  BreathPhaseKind? _lastPhase;
   bool _running = false;
   bool _finished = false;
 
@@ -228,7 +248,9 @@ class _CalmBreathingState extends State<CalmBreathing>
   Duration _quietElapsed = Duration.zero;
 
   /// Whether this session brackets the pacing with the two quiet windows.
-  bool _windows = false;
+  /// Edge+: on by default — the before/after is what shows which exercise
+  /// helps. Without a band it falls through to an ordinary session.
+  bool _windows = true;
 
   /// What a run of past sessions shows, which is usually "not enough yet".
   /// Read once on open and again after a session banks its windows.
@@ -373,9 +395,8 @@ class _CalmBreathingState extends State<CalmBreathing>
     }
   }
 
-  /// Close the windows and land on the result. The two numbers go to the
-  /// database and NOWHERE else — a delta shown at the end of a session is a
-  /// score to chase, and chasing it is stress.
+  /// Close the windows and land on the result. Edge+: the result shows the
+  /// before/after ([WinddownChangeCard]) — upstream kept it out of sight.
   Future<void> _endWindows() async {
     _quietTick?.cancel();
     _quietWatch.stop();
@@ -412,7 +433,6 @@ class _CalmBreathingState extends State<CalmBreathing>
       _running = true;
       _finished = false;
       _elapsed = Duration.zero;
-      _lastPhase = null;
     });
     _ticker?.dispose();
     _slowTick?.cancel();
@@ -433,12 +453,8 @@ class _CalmBreathingState extends State<CalmBreathing>
       _stop();
       return;
     }
-    final at = phaseAt(_pattern, elapsed);
-    if (at != null && at.phase.kind != _lastPhase) {
-      _lastPhase = at.phase.kind;
-      // Best-effort haptic cue so the session works with the screen off.
-      context.read<AppState>().buzzBreathPhase(at.phase.kind);
-    }
+    // Edge+: no band buzz at the phase changes any more. It ran on every
+    // breath and kept the band shaking through the whole exercise.
     setState(() => _elapsed = elapsed);
   }
 
@@ -672,8 +688,12 @@ class _Setup extends StatelessWidget {
         // The buzz is band-dependent and this screen does not yet know whether
         // the band will accept the session, so it is not promised here. The
         // `!banded` card during the run is where that gets said.
+        // Edge+: no band buzz any more, so the ring is the pacer.
         Text(
-          l?.calmBreathingRingLeads ?? 'The ring leads. Put the phone down.',
+          tr(c, 'Folge dem Ring. Vorher und nachher misst das Armband deinen '
+                  'Puls, wenn es verbunden ist.',
+              'Follow the ring. With the band connected, it measures your '
+                  'heart rate before and after.'),
           style: F.cap.copyWith(color: p.ink2, height: 1.5),
         ),
         for (final b in patternsFor(yours, l))
@@ -769,6 +789,8 @@ class _Setup extends StatelessWidget {
         // thing to read before beginning.
         Section(l?.calmBreathingYourOwnPace ?? 'Your own pace',
             _sweepDoor(c, p, app.isConnected, yours)),
+        // Edge+: which exercise calmed the body most, from the before/after.
+        const WinddownRanking(),
       ],
     );
   }
@@ -1117,8 +1139,15 @@ class _Result extends StatelessWidget {
         Text(l?.calmBreathingThatIsDone ?? 'That is done.',
             style: F.t1.copyWith(color: p.ink)),
         const SizedBox(height: S.x5),
+        // Edge+: before against after, when both quiet windows ran.
+        if (app.lastWinddownComparison case final cmp?) ...[
+          WinddownChangeCard(cmp),
+          const SizedBox(height: S.x3),
+        ],
+        // Edge+: an unscored pattern says nothing here rather than a card
+        // explaining why it has no score.
         if (absent != null)
-          absent
+          (rated ? absent : const SizedBox.shrink())
         else
           SignalCard(
             LucideIcons.wind,
@@ -1260,4 +1289,143 @@ class _SweepResult extends StatelessWidget {
                 'is set yet: the pace only changes when two sittings pick the '
                 'same one.');
   }
+}
+
+// ── Edge+ · before and after ──────────────────────────────────────────────
+
+/// Heart rate, HRV and breathing rate before against after one session.
+class WinddownChangeCard extends StatelessWidget {
+  const WinddownChangeCard(this.e, {super.key});
+  final WinddownEntry e;
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    Widget row(String name, double? a, double? b, String unit,
+        {required bool lowerIsCalmer}) {
+      final d = a == null || b == null ? null : b - a;
+      final calmer = d == null || d.abs() < 0.5
+          ? null
+          : (lowerIsCalmer ? d < 0 : d > 0);
+      String f(double? v) => v == null ? '–' : v.toStringAsFixed(v < 30 && unit == '/min' ? 1 : 0);
+      return Padding(
+        padding: const EdgeInsets.only(top: S.x2),
+        child: Row(children: [
+          Expanded(child: Text(name, style: F.body.copyWith(color: p.ink2))),
+          Text('${f(a)} → ${f(b)} $unit',
+              style: F.n17.copyWith(color: p.ink)),
+          const SizedBox(width: S.x2),
+          SizedBox(
+            width: 52,
+            child: Text(
+              d == null ? '' : '${d > 0 ? '+' : ''}${d.toStringAsFixed(unit == '/min' ? 1 : 0)}',
+              textAlign: TextAlign.end,
+              style: F.cap.copyWith(
+                  color: calmer == null
+                      ? p.ink3
+                      : p.on(calmer ? C.green : C.orange)),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    return Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(tr(c, 'VORHER → NACHHER', 'BEFORE → AFTER'),
+            style: F.over.copyWith(color: p.ink3)),
+        row(tr(c, 'Puls', 'Heart rate'), e.preHr, e.postHr, 'bpm',
+            lowerIsCalmer: true),
+        row('HRV', e.preRmssd, e.postRmssd, 'ms', lowerIsCalmer: false),
+        row(tr(c, 'Atmung', 'Breathing'), e.preResp, e.postResp, '/min',
+            lowerIsCalmer: true),
+      ]),
+    );
+  }
+}
+
+/// The label the picker shows for a stored pattern key.
+String winddownLabel(BuildContext c, String key, String fallback) {
+  final l = AppLocalizations.of(c);
+  if (key.startsWith('resonance')) return localizedBreathPatterns(l).first.label;
+  for (final b in localizedBreathPatterns(l)) {
+    if (b.key == key) return b.label;
+  }
+  return fallback;
+}
+
+/// Exercises by how far they brought the heart rate down, averaged over every
+/// session measured before and after. Nothing until there is one.
+class WinddownRanking extends StatelessWidget {
+  const WinddownRanking({super.key});
+
+  @override
+  Widget build(BuildContext c) => ValueListenableBuilder<int>(
+    valueListenable: WinddownLog.changed,
+    builder: (c, _, _) => FutureBuilder<List<WinddownEntry>>(
+      future: WinddownLog.load(),
+      builder: (c, s) {
+        final ranks = rankWinddown(s.data ?? const []);
+        if (ranks.isEmpty) return const SizedBox.shrink();
+        final p = P.of(c);
+        String d(double? v, int digits) => v == null
+            ? '–'
+            : '${v > 0 ? '+' : ''}${v.toStringAsFixed(digits)}';
+        return Section(
+          tr(c, 'Was dich am meisten beruhigt', 'What calms you most'),
+          Surface(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  const Expanded(child: SizedBox()),
+                  for (final h in [tr(c, 'Puls', 'HR'), 'HRV', tr(c, 'Atmung', 'Breath')])
+                    SizedBox(
+                      width: 56,
+                      child: Text(h,
+                          textAlign: TextAlign.end,
+                          style: F.over.copyWith(color: p.ink3)),
+                    ),
+                ]),
+                for (final r in ranks.take(6))
+                  Padding(
+                    padding: const EdgeInsets.only(top: S.x2),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(
+                          '${winddownLabel(c, r.key, r.label)}  ·  ${r.count}×',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: F.body.copyWith(color: p.ink),
+                        ),
+                      ),
+                      for (final v in [(r.hr, 0), (r.rmssd, 0), (r.resp, 1)])
+                        SizedBox(
+                          width: 56,
+                          child: Text(d(v.$1, v.$2),
+                              textAlign: TextAlign.end,
+                              style: F.cap.copyWith(color: p.ink2)),
+                        ),
+                    ]),
+                  ),
+                const SizedBox(height: S.x2),
+                Text(
+                  tr(
+                    c,
+                    'Durchschnittliche Änderung nachher gegen vorher. Weniger '
+                        'Puls und Atmung, mehr HRV heißt ruhiger. Erst nach '
+                        'einigen Sitzungen aussagekräftig.',
+                    'Average change, after against before. Lower heart rate '
+                        'and breathing, higher HRV is calmer. Only meaningful '
+                        'after a few sessions.',
+                  ),
+                  style: F.over.copyWith(color: p.ink3, height: 1.5),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }

@@ -75,8 +75,10 @@ final _rules = <_Rule>[
     // a clock, not an animation.
     // Edge+: the experiments do calendar math (windows of days, a 45 min work
     // mode tick), never an animation.
+    // Edge+: the sleep player's skip steps and sleep timer are clock time.
     allow: {_tokenFile, 'lib/ui2/screens/home_screen.dart', 'lib/ui2/tab_header.dart',
-        'lib/ui2/experimental/xp_core.dart', 'lib/ui2/experimental/xp_features.dart'},
+        'lib/ui2/experimental/xp_core.dart', 'lib/ui2/experimental/xp_features.dart',
+        'lib/ui2/screens/winddown_screen.dart'},
   ),
   _Rule(
     'raw gesture detector',
@@ -211,6 +213,10 @@ const _notComponents = {
   'DentalScreen', 'OralBConnectScreen',
   // Edge+ screen time: a Scaffold route that reads Prefs and the journal.
   'ScreenTimeScreen',
+  // Edge+ falling asleep: Scaffold routes and cards that read the audio
+  // player, Prefs or AppState's last breathing session.
+  'WinddownScreen', 'EpisodesScreen', 'PlayerCard', 'WinddownChangeCard',
+  'WinddownRanking',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.

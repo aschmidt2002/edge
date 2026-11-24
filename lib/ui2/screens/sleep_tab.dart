@@ -14,9 +14,14 @@ import '../profile/alarm.dart';
 import '../experimental/xp_features.dart'
     show SleepPlannerCard, XpScreen, loadSleepStress;
 import '../ui2.dart';
+import '../../sleep_audio/sleep_audio.dart';
+import '../../stress/winddown_log.dart';
+import 'calm_breathing.dart';
 import 'circadian_detail.dart';
+import 'metric_detail.dart' show detailLinkRow;
 import 'sleep_detail.dart';
 import 'wellness_screen.dart';
+import 'winddown_screen.dart';
 
 class SleepTab extends StatelessWidget {
   const SleepTab({super.key});
@@ -47,6 +52,10 @@ class SleepTab extends StatelessWidget {
       // Edge+: three doors in one row, no heading and no subtitles — the
       // icon and the word say what is behind each.
       footer: [
+        // Edge+: falling asleep — the breathing exercises (moved here from
+        // Health) and the sleep sounds and stories.
+        const SizedBox(height: S.x5),
+        const _Winddown(),
         const SizedBox(height: S.x5),
         _Doors([
           (
@@ -126,4 +135,60 @@ class _Doors extends StatelessWidget {
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
       style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600));
+}
+
+/// Edge+: Einschlafen — two doors, each saying what is new behind it.
+class _Winddown extends StatelessWidget {
+  const _Winddown();
+
+  @override
+  Widget build(BuildContext c) {
+    void push(Widget w) =>
+        Navigator.of(c).push(MaterialPageRoute<void>(builder: (_) => w));
+    final audio = SleepAudio.instance;
+    return Section(
+      tr(c, 'Einschlafen', 'Falling asleep'),
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ValueListenableBuilder<int>(
+          valueListenable: WinddownLog.changed,
+          builder: (c, _, _) => FutureBuilder<List<WinddownEntry>>(
+            future: WinddownLog.load(),
+            builder: (c, s) {
+              final best = rankWinddown(s.data ?? const []).firstOrNull;
+              final hr = best?.hr;
+              return detailLinkRow(
+                c,
+                LucideIcons.wind,
+                tr(c, 'Atemübungen', 'Breathing exercises'),
+                best == null || hr == null || hr >= 0
+                    ? tr(c, 'Mit Puls vorher und nachher',
+                        'With heart rate before and after')
+                    : tr(c,
+                        'Am ruhigsten: ${winddownLabel(c, best.key, best.label)} '
+                            '(Puls ${hr.toStringAsFixed(0)})',
+                        'Calms you most: ${winddownLabel(c, best.key, best.label)} '
+                            '(HR ${hr.toStringAsFixed(0)})'),
+                () => push(const CalmBreathing()),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: S.x2),
+        ListenableBuilder(
+          listenable: audio,
+          builder: (c, _) => detailLinkRow(
+            c,
+            LucideIcons.headphones,
+            tr(c, 'Klänge & Geschichten', 'Sounds & stories'),
+            audio.now != null
+                ? tr(c, 'Läuft: ${audio.now!.title}',
+                    'Playing: ${audio.now!.title}')
+                : tr(c, 'Regen, Meer, Rauschen, Hörspiele',
+                    'Rain, sea, noise, radio plays'),
+            () => push(const WinddownScreen()),
+          ),
+        ),
+      ]),
+    );
+  }
 }
