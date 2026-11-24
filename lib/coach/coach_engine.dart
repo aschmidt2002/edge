@@ -18,6 +18,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../ai/food_photo.dart' show geminiRetryPlan, geminiRetryable, retryDelay;
+import '../ai/gemini_coach.dart' show coachUsesGemini;
 import '../ai/journal_ai.dart' show mergeJournalEntry;
 import '../data/day_label.dart';
 import '../data/db.dart';
@@ -882,16 +884,26 @@ class CoachEngine {
       final bearer = chatgpt
           ? await config.chatgpt.accessToken()
           : (config.hasKey ? config.apiKey : null);
-      final resp = await c
+      Future<http.Response> send(String p) => c
           .post(
             Uri.parse('$apiBase/${api.endpoint}'),
             headers: {
               if (bearer != null) 'Authorization': 'Bearer $bearer',
               'content-type': 'application/json',
             },
-            body: payload,
+            body: p,
           )
           .timeout(config.requestTimeout);
+      var resp = await send(payload);
+      // Edge+: Gemini's free tier answers 503 when Google is overloaded. Wait
+      // and retry, then fall back to a lighter model; same plan as the photo.
+      if (coachUsesGemini(config)) {
+        for (final (wait, m) in geminiRetryPlan(model)) {
+          if (!geminiRetryable(resp.statusCode)) break;
+          await Future<void>.delayed(retryDelay(wait));
+          resp = await send(m == model ? payload : jsonEncode({...body, 'model': m}));
+        }
+      }
       if (resp.statusCode != 200) {
         throw CoachException(chatgpt
             ? chatGptHttpError(resp.statusCode, utf8.decode(resp.bodyBytes))

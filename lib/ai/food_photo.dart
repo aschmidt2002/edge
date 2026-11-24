@@ -426,20 +426,29 @@ Future<FoodPhotoEstimate> estimateFoodPhotoGemini({
       'responseSchema': _geminiSchema,
     },
   };
+  final payload = jsonEncode(body);
   final c = client ?? http.Client();
-  final http.Response res;
+  http.Response? res;
   try {
-    res = await c
+    Future<http.Response> send(String m) => c
         .post(
           Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/'
-              '$model:generateContent'),
+              '$m:generateContent'),
           headers: {
             'content-type': 'application/json',
             'x-goog-api-key': apiKey,
           },
-          body: jsonEncode(body),
+          body: payload,
         )
         .timeout(const Duration(seconds: 120));
+    res = await send(model);
+    // The free tier answers 503 when Google is overloaded, often for a few
+    // seconds only: wait and try again, then fall back to a lighter model.
+    for (final (wait, m) in geminiRetryPlan(model)) {
+      if (!geminiRetryable(res!.statusCode)) break;
+      await Future<void>.delayed(retryDelay(wait));
+      res = await send(m);
+    }
   } catch (e) {
     throw FoodPhotoException(lang == 'de'
         ? 'Gemini ist nicht erreichbar. Prüfe die Internetverbindung.'
@@ -447,9 +456,29 @@ Future<FoodPhotoEstimate> estimateFoodPhotoGemini({
   } finally {
     if (client == null) c.close();
   }
-  return parseGeminiResponse(res.statusCode, utf8.decode(res.bodyBytes),
+  return parseGeminiResponse(res!.statusCode, utf8.decode(res.bodyBytes),
       lang: lang);
 }
+
+/// A lighter Flash model that is usually still answering when the main one is
+/// overloaded.
+const kGeminiFallback = 'gemini-flash-lite-latest';
+
+/// Statuses worth another try: overloaded, internal error, per-minute limit.
+bool geminiRetryable(int status) =>
+    status == 503 || status == 500 || status == 429;
+
+/// What to try after a retryable failure of [model]: (wait, model) pairs.
+/// Twice more on the same model with a growing wait, then the fallback.
+List<(Duration, String)> geminiRetryPlan(String model) => [
+      (const Duration(seconds: 1), model),
+      (const Duration(seconds: 3), model),
+      (const Duration(seconds: 1), model == kGeminiPro ? kGeminiFlash : kGeminiFallback),
+      (const Duration(seconds: 3), model == kGeminiPro ? kGeminiFlash : kGeminiFallback),
+    ];
+
+/// Tests set this to skip the real waits.
+Duration Function(Duration) retryDelay = (d) => d;
 
 /// Split out so the error handling can be tested without the network.
 FoodPhotoEstimate parseGeminiResponse(int status, String raw,

@@ -372,6 +372,13 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     await _estimatePhoto(ai);
   }
 
+  /// Same photo, same question, after a failed attempt.
+  Future<void> _retryPhoto() async {
+    final ai = await activeFoodAi();
+    if (ai == null || !mounted) return;
+    await _estimatePhoto(ai, withAnswers: _estimate != null);
+  }
+
   /// Ask again from the same photo, with the answers typed so far.
   Future<void> _reestimate() async {
     final ai = await activeFoodAi();
@@ -475,7 +482,10 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
       out.addAll([
         const SizedBox(height: S.x3),
         StatusCard(tr(c, 'Keine Schätzung', 'No estimate'), _photoError!,
-            icon: LucideIcons.triangleAlert),
+            icon: LucideIcons.triangleAlert,
+            // The photo is kept, so trying again needs no new picture.
+            fix: _photo == null ? '' : tr(c, 'Nochmal versuchen', 'Try again'),
+            onFix: _photo == null ? null : _retryPhoto),
       ]);
     }
     if (est == null) return out;

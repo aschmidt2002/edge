@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openstrap_edge/ai/food_photo.dart';
 import 'package:openstrap_edge/ai/gemini_coach.dart';
 import 'package:openstrap_edge/coach/coach_config.dart';
@@ -120,5 +123,73 @@ void main() {
         'https://generativelanguage.googleapis.com');
     expect(coachUsesGemini(CoachConfig()), isFalse); // default is OpenAI
     expect(CoachApi.defaultFor(kGeminiOpenAiBase), CoachApi.chatCompletions);
+  });
+
+  group('gemini retries', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      retryDelay = (_) => Duration.zero;
+    });
+    final good = jsonEncode({
+      'candidates': [
+        {
+          'content': {
+            'parts': [
+              {
+                'text': jsonEncode({
+                  'label': 'Apfel', 'portion_g': 150, 'kcal': 80,
+                  'protein_g': 0, 'carbs_g': 20, 'fat_g': 0, 'fibre_g': 3,
+                  'confidence': 'high', 'questions': [], 'note': '',
+                }),
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    test('a 503 is retried and the answer used', () async {
+      var n = 0;
+      final e = await estimateFoodPhotoGemini(
+        apiKey: 'k', jpeg: [1, 2, 3], lang: 'de',
+        client: MockClient((r) async =>
+            ++n < 3 ? http.Response('{}', 503) : http.Response(good, 200)),
+      );
+      expect(n, 3);
+      expect(e.label, 'Apfel');
+    });
+
+    test('after the retries it falls back to the lighter model', () async {
+      final urls = <String>[];
+      await expectLater(
+        estimateFoodPhotoGemini(
+          apiKey: 'k', jpeg: [1], lang: 'de',
+          client: MockClient((r) async {
+            urls.add(r.url.path);
+            return http.Response('{}', 503);
+          }),
+        ),
+        throwsA(isA<FoodPhotoException>()
+            .having((e) => e.message, 'message', contains('ausgelastet'))),
+      );
+      expect(urls.length, 5);
+      expect(urls.first, contains(kGeminiFlash));
+      expect(urls.last, contains(kGeminiFallback));
+    });
+
+    test('a bad key is not retried', () async {
+      var n = 0;
+      await expectLater(
+        estimateFoodPhotoGemini(
+          apiKey: 'k', jpeg: [1], lang: 'en',
+          client: MockClient((r) async {
+            n++;
+            return http.Response('{"error":{"message":"API key not valid"}}', 400);
+          }),
+        ),
+        throwsA(isA<FoodPhotoException>()),
+      );
+      expect(n, 1);
+    });
   });
 }
