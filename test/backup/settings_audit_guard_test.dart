@@ -63,6 +63,7 @@ const _mustTravel = {
 };
 
 const _mustStay = {
+  'plus_checkin_morning_day', 'plus_checkin_evening_day', // Edge+
   'device_alerts.low_armed',
   'install_device_id', 'paired_remote_id', 'paired_serial', 'paired_generation',
   'paired_worn_on', 'ble.ask_add_pending',

@@ -120,7 +120,7 @@ void main() {
 
     // Today's own readiness ring is showing (its number is real Text, not
     // canvas-painted), and so is the stepper.
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
     expect(find.bySemanticsLabel('Previous day'), findsOneWidget);
     // The newest day: forward is a dead arrow.
     expect(find.bySemanticsLabel('Next day'), findsOneWidget);
@@ -131,13 +131,13 @@ void main() {
     // Yesterday's readiness (42, off getDayOverview) replaced today's (70) —
     // proof the screen actually reloaded through `HomeData.loadForDay`
     // rather than just relabelling the same data.
-    expect(find.text('70'), findsNothing);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('70%'), findsNothing);
+    expect(find.text('42%'), findsOneWidget);
 
     // Stepping forward again returns to today's own number.
     await t.tap(find.bySemanticsLabel('Next day'));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
   });
 
   test('a past day is kept only for a short absence on the same day', () {
@@ -197,11 +197,11 @@ void main() {
     await _settle(t);
     await t.tap(find.bySemanticsLabel('Previous day'));
     await _settle(t);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
 
     _background(t, clock, const Duration(minutes: 2));
     await _settle(t);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
     expect(find.text('Back to today'), findsOneWidget);
   });
 
@@ -222,11 +222,11 @@ void main() {
     await _settle(t);
     await t.tap(find.bySemanticsLabel('Previous day'));
     await _settle(t);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
 
     _background(t, clock, const Duration(minutes: 2));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
     expect(find.text('Back to today'), findsNothing);
   });
 
@@ -244,11 +244,11 @@ void main() {
       ),
     ));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
 
     _background(t, clock, const Duration(minutes: 2));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
     expect(find.text('Back to today'), findsNothing);
   });
 
@@ -271,18 +271,18 @@ void main() {
     await _settle(t);
     await t.tap(find.bySemanticsLabel('Previous day'));
     await _settle(t);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
 
     // A glance at Control Center only makes the app inactive: stay put.
     _lifecycle(t, const [AppLifecycleState.inactive, AppLifecycleState.resumed]);
     await _settle(t);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
 
     // Away for half an hour: today, and no "Back to today".
     _background(t, clock, kHomeKeepDayAway);
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
-    expect(find.text('42'), findsNothing);
+    expect(find.text('70%'), findsOneWidget);
+    expect(find.text('42%'), findsNothing);
     expect(find.text('Back to today'), findsNothing);
   });
 
@@ -304,15 +304,15 @@ void main() {
     await _settle(t);
     await t.tap(find.bySemanticsLabel('Previous day'));
     await _settle(t);
-    expect(find.text('42'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
 
     repo.failToday = true;
     final clock = _Clock();
     _background(t, clock, const Duration(hours: 8));
     await t.pump();
-    expect(find.text('42'), findsNothing);
+    expect(find.text('42%'), findsNothing);
     await _settle(t);
-    expect(find.text('42'), findsNothing);
+    expect(find.text('42%'), findsNothing);
     expect(find.text('Today could not be read'), findsOneWidget);
   });
 
@@ -339,7 +339,7 @@ void main() {
     await _settle(t);
     await t.tap(find.text('Back to today'));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
     // Stored as "today" (null), which is what the day ring opens on — a
     // pinned date would hand the detail screen today's label instead.
     t.widget<RingTrio>(find.byType(RingTrio)).onOpen!(HomeRingKind.sleep);
@@ -474,6 +474,10 @@ void main() {
 
   testWidgets('a past day with nothing recorded says so, not "sync the band"',
       (t) async {
+    // Edge+: Home is taller now; build the whole list.
+    t.view.physicalSize = const Size(390 * 3, 3200 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
     final app = AppState.forTesting();
     addTearDown(app.dispose);
     app.repo = _EmptyPastRepo();
@@ -495,6 +499,10 @@ void main() {
   });
 
   testWidgets('the past-day empty card follows the app language', (t) async {
+    // Edge+: Home is taller now; build the whole list.
+    t.view.physicalSize = const Size(390 * 3, 3200 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
     final app = AppState.forTesting();
     addTearDown(app.dispose);
     app.repo = _EmptyPastRepo();
@@ -543,6 +551,10 @@ void main() {
   });
 
   testWidgets('a failed read still shows the alarm door', (t) async {
+    // Edge+: Home is taller now; build the whole list.
+    t.view.physicalSize = const Size(390 * 3, 3200 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
     // The alarm lives on AppState, not HomeData, so the error card must not
     // take it down with it.
     final app = AppState.forTesting();
@@ -567,6 +579,10 @@ void main() {
   // greeting date were still today's, and nothing said the read had failed.
   testWidgets('a past day that fails to load does not keep today on screen',
       (t) async {
+    // Edge+: Home is taller now; build the whole list.
+    t.view.physicalSize = const Size(390 * 3, 3200 * 3);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
     final app = AppState.forTesting();
     addTearDown(app.dispose);
     app.repo = _PastDayThrowsRepo();
@@ -579,19 +595,19 @@ void main() {
       ),
     ));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
 
     await t.tap(find.bySemanticsLabel('Previous day'));
     await _settle(t);
 
-    expect(find.text('70'), findsNothing);
+    expect(find.text('70%'), findsNothing);
     expect(find.textContaining('could not be read'), findsOneWidget);
     expect(find.text('Today could not be read'), findsNothing);
 
     await t.ensureVisible(find.text('Back to today'));
     await t.tap(find.text('Back to today'));
     await _settle(t);
-    expect(find.text('70'), findsOneWidget);
+    expect(find.text('70%'), findsOneWidget);
     expect(find.textContaining('could not be read'), findsNothing);
   });
 

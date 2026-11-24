@@ -82,6 +82,7 @@ import 'metric_detail.dart';
 import 'readiness_detail.dart';
 import 'sleep_detail.dart';
 import 'health_screen.dart' show HealthScreen;
+import '../experimental/xp_features.dart' show ExperimentalSection;
 
 // ═══════════════════ shared plumbing ═══════════════════
 
@@ -2686,6 +2687,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       ],
       // The Today guide starts on the strain ring, which a bare past day does not draw.
       if (isToday) const HelpEntry(topic: GuideTopic.today),
+      // Edge+: features still being tried out, at the very bottom.
+      if (isToday && widget.data == null) const ExperimentalSection(),
     ]));
   }
 

@@ -249,7 +249,8 @@ void main() {
       expect(ring.solid, isTrue);
     });
 
-    testWidgets('a night longer than the target is drawn past a full circle',
+    // Edge+: past the target the ring is one full, closed circle.
+    testWidgets('a night longer than the target is drawn as a full circle',
         (t) async {
       await _pump(
         t,
@@ -260,7 +261,7 @@ void main() {
       );
       final ring = _sleepPainter(t) as StageRing;
       final sweep = ring.arcs.fold<double>(0, (s, a) => s + a.fraction);
-      expect(sweep, closeTo(540 / 480, 1e-9));
+      expect(sweep, closeTo(1.0, 1e-9));
       _caption('113% of 8h 00m (default)', ['113% of 8h · default target', '113% of default 8h']);
     });
 

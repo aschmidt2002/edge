@@ -11,6 +11,9 @@ import 'package:sqflite/sqflite.dart';
 import '../coach/coach_config.dart' show CoachConfig;
 
 const Map<String, String> kPrefsNotBackedUp = {
+  // Edge+: which day the check-ins last showed; a restore should ask again.
+  'plus_checkin_morning_day': 'per-phone once-a-day marker for the morning check-in',
+  'plus_checkin_evening_day': 'per-phone once-a-day marker for the evening check-in',
   'install_device_id': 'identifies this install; a restore must not clone it',
   'paired_remote_id': 'BLE address bonded to this phone; pair again',
   'paired_serial': 'identity mirror of the band paired to this phone',
