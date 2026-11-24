@@ -510,8 +510,8 @@ void main() {
             reason: 'one under the hypnogram, one under the night signals');
         final rects = [for (var i = 0; i < 2; i++) t.getRect(panels.at(i))];
         for (var i = 0; i < 2; i++) {
-          expect(inPanel(panels.at(i), 'LATEST · 07:00'), findsOneWidget);
-          expect(inPanel(panels.at(i), 'Awake'), findsOneWidget);
+          // Edge+: the stage is the caption, beside the time.
+          expect(inPanel(panels.at(i), 'Awake · 07:00'), findsOneWidget);
           expect(inPanel(panels.at(i), '66 bpm'), findsOneWidget);
           expect(find.descendant(of: panels.at(i), matching: find.text('—')),
               findsAtLeastNWidgets(2),
@@ -521,17 +521,17 @@ void main() {
           expect(box.border, isNull, reason: 'no border at rest');
         }
         final surfaces = find.byType(Surface).evaluate().length;
-        for (final (label, at, time) in [
-          ('Hypnogram', .25, '01:00'),
-          ('Through the night', .5, '03:00'),
-          ('Hypnogram', .75, '05:00'),
+        for (final (label, at, time, stage) in [
+          ('Hypnogram', .25, '01:00', 'Deep sleep'),
+          ('Through the night', .5, '03:00', 'Not measured'),
+          ('Hypnogram', .75, '05:00', 'REM'),
         ]) {
           await scrub(t, label, at);
           expect(panels, findsNWidgets(2));
           expect(find.byType(Surface).evaluate().length, surfaces,
               reason: 'the old readout added a Surface on every scrub');
           for (var i = 0; i < 2; i++) {
-            expect(inPanel(panels.at(i), 'SELECTED · $time'), findsOneWidget);
+            expect(inPanel(panels.at(i), '$stage · $time'), findsOneWidget);
             expect(t.getRect(panels.at(i)), rects[i], reason: 'no shift at $time');
             final box =
                 t.widget<Container>(panels.at(i)).decoration as BoxDecoration;
@@ -549,14 +549,14 @@ void main() {
       // 01:00: deep sleep; heart rate and HRV were both recorded here.
       await scrub(t, 'Hypnogram', .25);
       for (var i = 0; i < 2; i++) {
-        expect(inPanel(panels.at(i), 'Deep sleep'), findsOneWidget);
+        expect(inPanel(panels.at(i), 'Deep sleep · 01:00'), findsOneWidget);
         expect(inPanel(panels.at(i), '54 bpm'), findsOneWidget);
         expect(inPanel(panels.at(i), '42 ms'), findsOneWidget);
       }
       // 03:00: an unobserved stretch; heart rate and breathing, no HRV.
       await scrub(t, 'Through the night', .5);
       for (var i = 0; i < 2; i++) {
-        expect(inPanel(panels.at(i), 'Not measured'), findsOneWidget,
+        expect(inPanel(panels.at(i), 'Not measured · 03:00'), findsOneWidget,
             reason: 'a hole in the record is not a stage');
         expect(inPanel(panels.at(i), '58 bpm'), findsOneWidget);
         expect(find.descendant(of: panels.at(i), matching: find.textContaining('17.5')),
@@ -568,7 +568,7 @@ void main() {
       // 05:00: REM, but no signal within reach: nothing is invented.
       await scrub(t, 'Hypnogram', .75);
       for (var i = 0; i < 2; i++) {
-        expect(inPanel(panels.at(i), 'REM'), findsOneWidget);
+        expect(inPanel(panels.at(i), 'REM · 05:00'), findsOneWidget);
         for (final unit in [' bpm', ' ms', 'br/min']) {
           expect(find.descendant(of: panels.at(i), matching: find.textContaining(unit)),
               findsNothing,
@@ -594,9 +594,7 @@ void main() {
       ]) {
         await scrub(t, 'Hypnogram', seconds / 28800);
         for (var i = 0; i < 2; i++) {
-          expect(inPanel(panels.at(i), 'SELECTED · $time'), findsOneWidget,
-              reason: 'panel $i at $seconds s');
-          expect(inPanel(panels.at(i), stage), findsOneWidget,
+          expect(inPanel(panels.at(i), '$stage · $time'), findsOneWidget,
               reason: 'panel $i at $seconds s');
         }
         final s = t.widget<Scrubber>(plot('Hypnogram'));
@@ -625,7 +623,8 @@ void main() {
           await scrub(t, 'Hypnogram', at == 1 ? .9999 : at);
           final caption = find.descendant(
               of: panel, matching: find.byKey(_captionKey));
-          for (final text in [inPanel(panel, stage), caption]) {
+          expect(t.widget<Text>(caption).data, startsWith('$stage · '));
+          for (final text in [caption]) {
             final color = t.widget<Text>(text).style!.color!;
             expect(color, p.on(pigment));
             expect(P.contrast(color, p.card2), greaterThanOrEqualTo(4.5));
@@ -639,8 +638,7 @@ void main() {
       await pump(t, signals: false);
       final panels = find.byKey(_panelKey);
       expect(panels, findsOneWidget);
-      expect(inPanel(panels, 'LATEST · 07:00'), findsOneWidget);
-      expect(inPanel(panels, 'Awake'), findsOneWidget);
+      expect(inPanel(panels, 'Awake · 07:00'), findsOneWidget);
       for (final unit in [' bpm', ' ms', 'br/min']) {
         expect(find.descendant(of: panels, matching: find.textContaining(unit)),
             findsNothing);
@@ -673,18 +671,18 @@ void main() {
     // Two charts, two panels, each showing the same instant: each chart's
     // reading is spoken by exactly one owner, so every displayed value is
     // spoken twice on the page and never twice for one chart.
-    testWidgets('at rest the panel speaks LATEST once per chart: the stage '
+    testWidgets('at rest the panel speaks the stage once per chart, then '
         'and every signal, a missing one as No record', (t) async {
       final h = t.ensureSemantics();
       await pump(t);
-      final readings = find.semantics.byLabel(RegExp(r'^LATEST'));
+      final readings = find.semantics.byLabel(RegExp(r'^Awake · '));
       expect(readings.evaluate(), hasLength(2), reason: 'one per panel');
       for (final n in readings.evaluate()) {
         expect(n.label,
-            'LATEST · 07:00, Stage Awake, Heart rate 66 bpm, '
+            'Awake · 07:00, Heart rate 66 bpm, '
             'HRV No record, Breathing No record');
       }
-      for (final value in ['Stage Awake', '66 bpm', 'HRV No record', 'Breathing No record']) {
+      for (final value in ['Awake · 07:00', '66 bpm', 'HRV No record', 'Breathing No record']) {
         expect(times(t, value), 2, reason: '$value: once per panel');
       }
       h.dispose();

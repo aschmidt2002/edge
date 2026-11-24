@@ -358,6 +358,12 @@ class ChartPanel extends StatelessWidget {
   /// not change size between days with and without one.
   final bool reserveNote;
 
+  /// Edge+: a caption word in place of LATEST/SELECTED (the sleep stage at
+  /// [time]), drawn in [color]. [titleSpan] lists every word it can be, so
+  /// the caption keeps one height across a scrub.
+  final String? title;
+  final List<String> titleSpan;
+
   const ChartPanel({
     super.key,
     required this.time,
@@ -370,6 +376,8 @@ class ChartPanel extends StatelessWidget {
     this.openLabel,
     this.note,
     this.reserveNote = false,
+    this.title,
+    this.titleSpan = const [],
   });
 
   static const panelKey = ValueKey('chart-panel');
@@ -472,7 +480,7 @@ class ChartPanel extends StatelessWidget {
     final l = AppLocalizations.of(c);
     final none = _none(c);
     final reading = [
-      '${l?.chartPanelLatest ?? 'LATEST'} · ${time ?? absent}',
+      '${title ?? l?.chartPanelLatest ?? 'LATEST'} · ${time ?? absent}',
       for (final x in cells) '${x.label} ${x.value ?? none}',
     ].join(', ');
     return (note ?? '').isEmpty ? reading : '$reading · $note';
@@ -483,14 +491,16 @@ class ChartPanel extends StatelessWidget {
     final latest = l?.chartPanelLatest ?? 'LATEST';
     final selected = l?.chartPanelSelected ?? 'SELECTED';
     final measure = F.over.copyWith(fontWeight: FontWeight.w700);
-    final style = measure.copyWith(color: scrubbed ? color : p.ink2);
+    final style =
+        measure.copyWith(color: scrubbed || title != null ? color : p.ink2);
+    final modes = title == null ? [latest, selected] : {...titleSpan, title!};
     final scaler = MediaQuery.textScalerOf(c);
     final dir = Directionality.of(c);
     final now = time ?? absent;
     return LayoutBuilder(builder: (_, box) {
       double tallest(Iterable<String> times) {
         var h = 0.0;
-        for (final mode in [latest, selected]) {
+        for (final mode in modes) {
           for (final at in times) {
             final tp = TextPainter(
               text: TextSpan(text: '$mode · $at', style: measure),
@@ -505,7 +515,7 @@ class ChartPanel extends StatelessWidget {
       }
 
       final key = (
-        measure, scaler, box.maxWidth, dir, '$latest|$selected',
+        measure, scaler, box.maxWidth, dir, modes.join('|'),
         Object.hashAll(timeSpan), timeSpan.length
       );
       var height = _captionHeights[key];
@@ -518,7 +528,7 @@ class ChartPanel extends StatelessWidget {
       if (!timeSpan.contains(now)) height = math.max(height, tallest([now]));
       return ConstrainedBox(
         constraints: BoxConstraints(minHeight: height),
-        child: Text('${scrubbed ? selected : latest} · $now',
+        child: Text('${title ?? (scrubbed ? selected : latest)} · $now',
             key: captionKey, style: style),
       );
     });
