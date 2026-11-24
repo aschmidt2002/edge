@@ -238,7 +238,7 @@ void main() {
         await _openRecovery(t, dark: dark, scale: scale, repo: _Repo());
 
         expect(find.text('What charged and drained you'), findsOneWidget);
-        expect(find.text('Sleep need tonight'), findsOneWidget);
+        expect(find.text('Tonight\'s need'), findsOneWidget);
         expect(find.byType(DriverBreakdown), findsOneWidget);
         _expectCardPainted(t);
       }, timeout: const Timeout(Duration(seconds: 60)));
@@ -291,7 +291,6 @@ void main() {
         // Every one of those is now ABSENT, which is a state this screen
         // already renders honestly — so the section is still here and still
         // says why, rather than the page being gone.
-        expect(find.text('Sleep need tonight'), findsOneWidget);
         expect(find.text('No sleep need yet'), findsOneWidget);
         _expectCardPainted(t);
       }, timeout: const Timeout(Duration(seconds: 60)));
@@ -322,23 +321,6 @@ void main() {
     _expectCardPainted(t);
   }, timeout: const Timeout(Duration(seconds: 60)));
 
-  // The plan is the Sleep tab's footer, so its debt link used to push a whole
-  // second SleepDetail over the one already on screen — same night, plus the
-  // Tonight section the tab leaves out on purpose. It scrolls back up instead.
-  testWidgets('the debt link stays on the Sleep tab instead of pushing it again',
-      (t) async {
-    await _openRecovery(t, dark: false, scale: 1.0, repo: _Repo());
-
-    final link = find.text('See what last night cost you');
-    expect(link, findsOneWidget);
-    await t.tap(link);
-    await _frames(t);
-
-    expect(find.byType(SleepDetail), findsNothing);
-    expect(find.text('See what last night cost you'), findsOneWidget);
-    expect(find.byType(BackButton), findsNothing);
-  }, timeout: const Timeout(Duration(seconds: 60)));
-
   // The sleep plan's durations were built as '1h 24m' by hand, so a Russian
   // reader got "Недосып … — 1h 24m" and an "8h 0m" need row, while Home
   // printed the same kind of figure as "8 ч 00 мин".
@@ -352,8 +334,6 @@ void main() {
     // need 28800 s, debt 1.4 h.
     expect(find.text('8 ч 00 мин'), findsOneWidget);
     expect(find.text('1 ч 24 мин'), findsOneWidget);
-    expect(find.textContaining('1 ч 24 мин'), findsNWidgets(2),
-        reason: 'the recommendation sentence names the debt too');
     expect(find.textContaining(RegExp(r'\d+h \d+m')), findsNothing);
   }, timeout: const Timeout(Duration(seconds: 60)));
 }

@@ -251,15 +251,6 @@ class _SleepPlannerCardState extends State<SleepPlannerCard> {
     final bed = wakeAt.subtract(Duration(minutes: inBed.round()));
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(LucideIcons.bedDouble, color: p.on(C.indigo), size: 20),
-          const SizedBox(width: S.x2),
-          Expanded(
-              child: Text(tr(c, 'Schlafplaner', 'Sleep planner'),
-                  style: F.head.copyWith(color: p.ink))),
-          Pill(tr(c, 'Experimentell', 'Experimental'), C.orange),
-        ]),
-        const SizedBox(height: S.x3),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -284,18 +275,15 @@ class _SleepPlannerCardState extends State<SleepPlannerCard> {
             ]),
           ),
         ]),
-        const SizedBox(height: S.x2),
-        Text(
-          tr(
-              c,
-              'Schlafbedarf ${hmText(need)}${_need == null ? ' (Standard)' : ''}, '
-                  'Effizienz ${(eff * 100).round()} %, ~$latency min zum Einschlafen. '
-                  'Tippe auf die Aufstehzeit, um sie zu ändern.',
-              'Sleep need ${hmText(need)}${_need == null ? ' (default)' : ''}, '
-                  'efficiency ${(eff * 100).round()} %, ~$latency min to fall asleep. '
-                  'Tap the wake time to change it.'),
-          style: F.cap.copyWith(color: p.ink2),
-        ),
+        // Edge+: no paragraph on how this is worked out. Only the one
+        // thing a reader could not tell from the two times: that the need
+        // behind them is an assumed default, not theirs.
+        if (_need == null) ...[
+          const SizedBox(height: S.x2),
+          Text(tr(c, 'Bedarf ${hmText(need)} (Standard)',
+                  'Need ${hmText(need)} (default)'),
+              style: F.cap.copyWith(color: p.ink3)),
+        ],
       ]),
     );
   }
