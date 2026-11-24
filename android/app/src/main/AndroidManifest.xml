@@ -68,6 +68,10 @@
          package it was declared for has no Dart import. It is the most
          policy-expensive permission there is, so it goes — with node="remove" so a
          library manifest cannot merge it back in behind us. -->
+    <!-- Edge+: screen time per app (ScreenTimeBridge.kt). The user grants it in
+         Settings > Usage access; it is never requested at runtime. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:node="remove" />
     <!-- ── Health Connect (export to Google Health Connect) ──
@@ -353,6 +357,11 @@
              falls back to a WebView. -->
         <intent>
             <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+        <!-- Edge+: launchable apps, so screen time can show their names. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 </manifest>
