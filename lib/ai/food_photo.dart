@@ -1,8 +1,13 @@
-// Edge+: estimate a meal's nutrition from a photo with Claude.
+// Edge+: estimate a meal's nutrition from a photo with an AI model.
 //
-// BYOK: the user's own Anthropic API key, stored in the platform
-// keychain/keystore and sent only to api.anthropic.com. The photo goes to the
-// same place and nowhere else; it is not kept on the device.
+// BYOK, two providers:
+//   • Google Gemini (default): a free API key from aistudio.google.com works,
+//     within Google's free-tier limits. Note that Google may use free-tier
+//     requests to improve its products.
+//   • Anthropic Claude (optional): needs an API key with billing.
+// Gemini is used when its key is set, otherwise Claude. The key lives in the
+// platform keychain/keystore and the photo goes only to that provider; it is
+// not kept on the device.
 //
 // The answer is an ESTIMATE and is treated as one: it pre-fills the log form,
 // the user can correct it or answer a short follow-up question, and only a
@@ -13,16 +18,19 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-/// The user's Anthropic API key. Same keychain options as the coach key, so a
+enum FoodAi { gemini, claude }
+
+/// One provider's API key. Same keychain options as the coach key, so a
 /// background relaunch on a locked phone can still read it.
-class ClaudeKey {
-  static const _k = 'claude_api_key';
+class ApiKeyStore {
+  const ApiKeyStore(this._k);
+  final String _k;
   static const _s = FlutterSecureStorage();
   static const _ios = IOSOptions(
     accessibility: KeychainAccessibility.first_unlock,
   );
 
-  static Future<String?> read() async {
+  Future<String?> read() async {
     try {
       final v = await _s.read(key: _k, iOptions: _ios);
       return (v == null || v.trim().isEmpty) ? null : v.trim();
@@ -32,7 +40,7 @@ class ClaudeKey {
   }
 
   /// Empty deletes.
-  static Future<void> write(String key) async {
+  Future<void> write(String key) async {
     final v = key.trim();
     if (v.isEmpty) {
       await _s.delete(key: _k, iOptions: _ios);
@@ -41,6 +49,20 @@ class ClaudeKey {
     }
   }
 }
+
+const geminiKey = ApiKeyStore('gemini_api_key');
+const claudeKey = ApiKeyStore('claude_api_key');
+
+/// The provider a photo goes to, with its key: Gemini when set, else Claude.
+Future<(FoodAi, String)?> activeFoodAi() async {
+  final g = await geminiKey.read();
+  if (g != null) return (FoodAi.gemini, g);
+  final c = await claudeKey.read();
+  if (c != null) return (FoodAi.claude, c);
+  return null;
+}
+
+String foodAiName(FoodAi ai) => ai == FoodAi.gemini ? 'Gemini' : 'Claude';
 
 /// One follow-up question and the user's answer to it.
 class FoodQa {
@@ -166,6 +188,36 @@ If the photo shows no food, set label to "" and every number to 0.
 Write label, questions and note in ${lang == 'de' ? 'German' : 'English'}.
 ''';
 
+String _userText(List<FoodQa> answers, String hint) {
+  final text = StringBuffer('Estimate the nutrition of this meal.');
+  if (hint.trim().isNotEmpty) {
+    text.write('\nThe user says it is: ${hint.trim()}');
+  }
+  if (answers.isNotEmpty) {
+    text.write('\nAnswers to your earlier questions:');
+    for (final a in answers) {
+      text.write('\n- ${a.question} ${a.answer}');
+    }
+    text.write('\nUse these answers. Do not ask further questions.');
+  }
+  return text.toString();
+}
+
+/// Estimate with [ai], using [apiKey].
+Future<FoodPhotoEstimate> estimateFoodPhotoWith(
+  FoodAi ai, {
+  required String apiKey,
+  required List<int> jpeg,
+  required String lang,
+  List<FoodQa> answers = const [],
+  String hint = '',
+}) =>
+    ai == FoodAi.gemini
+        ? estimateFoodPhotoGemini(
+            apiKey: apiKey, jpeg: jpeg, lang: lang, answers: answers, hint: hint)
+        : estimateFoodPhoto(
+            apiKey: apiKey, jpeg: jpeg, lang: lang, answers: answers, hint: hint);
+
 /// Send [jpeg] to Claude and return its estimate. [answers] are earlier
 /// follow-up questions with the user's answers; with them the request is
 /// made again from the same photo.
@@ -178,17 +230,7 @@ Future<FoodPhotoEstimate> estimateFoodPhoto({
   String hint = '',
   http.Client? client,
 }) async {
-  final text = StringBuffer('Estimate the nutrition of this meal.');
-  if (hint.trim().isNotEmpty) {
-    text.write('\nThe user says it is: ${hint.trim()}');
-  }
-  if (answers.isNotEmpty) {
-    text.write('\nAnswers to your earlier questions:');
-    for (final a in answers) {
-      text.write('\n- ${a.question} ${a.answer}');
-    }
-    text.write('\nUse these answers. Do not ask further questions.');
-  }
+  final text = _userText(answers, hint);
 
   final body = {
     'model': _model,
@@ -212,7 +254,7 @@ Future<FoodPhotoEstimate> estimateFoodPhoto({
               'data': base64Encode(jpeg),
             },
           },
-          {'type': 'text', 'text': text.toString()},
+          {'type': 'text', 'text': text},
         ],
       },
     ],
@@ -279,6 +321,167 @@ FoodPhotoEstimate parseFoodPhotoResponse(int status, String raw,
     for (final b in (j['content'] as List? ?? const []))
       if (b is Map && b['type'] == 'text') b['text'] as String? ?? '',
   ].join();
+  try {
+    return FoodPhotoEstimate.fromJson(
+        jsonDecode(text) as Map<String, dynamic>);
+  } catch (_) {
+    throw FoodPhotoException(de ? 'Unlesbare Antwort.' : 'Unreadable answer.');
+  }
+}
+
+// ── Gemini ──────────────────────────────────────────────────────────────────
+
+/// The `-latest` alias follows Google's current Flash model, which is on the
+/// free tier, so the app does not break when a version is retired.
+const _geminiModel = 'gemini-flash-latest';
+
+/// The same fields as [_schema], in the OpenAPI subset Gemini takes.
+const _geminiSchema = {
+  'type': 'OBJECT',
+  'properties': {
+    'label': {'type': 'STRING'},
+    'portion_g': {'type': 'NUMBER'},
+    'kcal': {'type': 'NUMBER'},
+    'protein_g': {'type': 'NUMBER'},
+    'carbs_g': {'type': 'NUMBER'},
+    'fat_g': {'type': 'NUMBER'},
+    'fibre_g': {'type': 'NUMBER'},
+    'confidence': {
+      'type': 'STRING',
+      'enum': ['low', 'medium', 'high'],
+    },
+    'questions': {
+      'type': 'ARRAY',
+      'items': {'type': 'STRING'},
+    },
+    'note': {'type': 'STRING'},
+  },
+  'required': [
+    'label',
+    'portion_g',
+    'kcal',
+    'protein_g',
+    'carbs_g',
+    'fat_g',
+    'fibre_g',
+    'confidence',
+    'questions',
+    'note',
+  ],
+};
+
+Future<FoodPhotoEstimate> estimateFoodPhotoGemini({
+  required String apiKey,
+  required List<int> jpeg,
+  required String lang,
+  String mediaType = 'image/jpeg',
+  List<FoodQa> answers = const [],
+  String hint = '',
+  http.Client? client,
+}) async {
+  final body = {
+    'systemInstruction': {
+      'parts': [
+        {'text': _system(lang)},
+      ],
+    },
+    'contents': [
+      {
+        'role': 'user',
+        'parts': [
+          {
+            'inlineData': {
+              'mimeType': mediaType,
+              'data': base64Encode(jpeg),
+            },
+          },
+          {'text': _userText(answers, hint)},
+        ],
+      },
+    ],
+    'generationConfig': {
+      'responseMimeType': 'application/json',
+      'responseSchema': _geminiSchema,
+    },
+  };
+  final c = client ?? http.Client();
+  final http.Response res;
+  try {
+    res = await c
+        .post(
+          Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/'
+              '$_geminiModel:generateContent'),
+          headers: {
+            'content-type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 120));
+  } catch (e) {
+    throw FoodPhotoException(lang == 'de'
+        ? 'Gemini ist nicht erreichbar. Prüfe die Internetverbindung.'
+        : 'Could not reach Gemini. Check your connection.');
+  } finally {
+    if (client == null) c.close();
+  }
+  return parseGeminiResponse(res.statusCode, utf8.decode(res.bodyBytes),
+      lang: lang);
+}
+
+/// Split out so the error handling can be tested without the network.
+FoodPhotoEstimate parseGeminiResponse(int status, String raw,
+    {String lang = 'en'}) {
+  final de = lang == 'de';
+  Map<String, dynamic>? j;
+  try {
+    j = jsonDecode(raw) as Map<String, dynamic>;
+  } catch (_) {}
+  if (status != 200) {
+    final err = j?['error'] as Map?;
+    final msg = err?['message'] as String?;
+    final keyBad = status == 401 ||
+        status == 403 ||
+        (status == 400 && (msg ?? '').toLowerCase().contains('api key'));
+    if (keyBad) {
+      throw FoodPhotoException(de
+          ? 'Der Gemini-Key wurde abgelehnt. Prüfe ihn unter Ernährung › Ziele.'
+          : 'The Gemini key was rejected. Check it under Nutrition › Goals.');
+    }
+    if (status == 429) {
+      throw FoodPhotoException(de
+          ? 'Das kostenlose Gemini-Kontingent ist gerade aufgebraucht. '
+              'Versuch es in einer Minute oder morgen nochmal.'
+          : 'The free Gemini quota is used up for now. Try again in a minute '
+              'or tomorrow.');
+    }
+    if (status == 503 || status == 500) {
+      throw FoodPhotoException(de
+          ? 'Gemini ist gerade ausgelastet. Versuch es gleich nochmal.'
+          : 'Gemini is busy right now. Try again in a moment.');
+    }
+    throw FoodPhotoException(
+        '${de ? 'Fehler' : 'Error'} $status${msg == null ? '' : ': $msg'}');
+  }
+  final declined = de
+      ? 'Gemini hat dieses Foto nicht ausgewertet.'
+      : 'Gemini declined to read this photo.';
+  if (j == null) {
+    throw FoodPhotoException(de ? 'Unlesbare Antwort.' : 'Unreadable answer.');
+  }
+  if ((j['promptFeedback'] as Map?)?['blockReason'] != null) {
+    throw FoodPhotoException(declined);
+  }
+  final cands = j['candidates'] as List? ?? const [];
+  final first = cands.isEmpty ? null : cands.first as Map?;
+  if (first == null) throw FoodPhotoException(declined);
+  final parts = (first['content'] as Map?)?['parts'] as List? ?? const [];
+  final text = [
+    for (final p in parts)
+      if (p is Map && p['text'] is String && p['thought'] != true)
+        p['text'] as String,
+  ].join();
+  if (text.trim().isEmpty) throw FoodPhotoException(declined);
   try {
     return FoodPhotoEstimate.fromJson(
         jsonDecode(text) as Map<String, dynamic>);

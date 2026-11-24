@@ -31,7 +31,7 @@ import 'journal_compose.dart' show OsTextField;
 import 'log_food.dart';
 import 'nutrition_plus.dart';
 import '../profile/profile.dart' show ProfileAvatar, SetRow;
-import 'claude_key_sheet.dart';
+import 'food_ai_key_sheet.dart';
 
 class NutritionScreen extends StatefulWidget {
   /// Pushed from the Activity tab rather than shown as a tab: a page with a
@@ -688,9 +688,9 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
           child: SetRow(
             LucideIcons.camera,
             C.domFood,
-            tr(c, 'Claude für Essensfotos', 'Claude for meal photos'),
+            tr(c, 'KI für Essensfotos', 'AI for meal photos'),
             sub: tr(c, 'Eigener API-Key', 'Your own API key'),
-            onTap: () => editClaudeKey(c),
+            onTap: () => editFoodAiKeys(c),
           ),
         ),
         const SizedBox(height: S.x4),

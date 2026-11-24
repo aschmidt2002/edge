@@ -75,7 +75,7 @@ const Map<String, String> kSecretsNotBackedUp = {
       'pair the band again on this phone',
   'lib/ble/oura_link.dart': 'Oura pairing key is a credential; '
       'pair the ring again on this phone',
-  'lib/ai/food_photo.dart': 'Edge+ Claude API key for meal photos is a '
+  'lib/ai/food_photo.dart': 'Edge+ Gemini/Claude API keys for meal photos are a '
       'credential; enter it again on the new phone',
 };
 
