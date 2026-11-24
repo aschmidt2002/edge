@@ -47,6 +47,7 @@ import '../profile/profile.dart' show ProfileAvatar, openProfile;
 import '../grammar.dart';
 import '../guides/help_entry.dart';
 import '../revision.dart';
+import '../plus_text.dart';
 import '../theme.dart';
 import '../../data/day_label.dart' show calendarDaysBetween;
 import 'log_workout.dart';
@@ -247,18 +248,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
       ),
       // Edge+: training plans live under strength training.
       Section(
-        Localizations.localeOf(c).languageCode == 'de'
-            ? 'Krafttraining'
-            : 'Strength training',
+        tr(c, 'Krafttraining', 'Strength training'),
         detailLinkRow(
             c,
             LucideIcons.dumbbell,
-            Localizations.localeOf(c).languageCode == 'de'
-                ? 'Trainingspläne'
-                : 'Training plans',
-            Localizations.localeOf(c).languageCode == 'de'
-                ? 'Plan starten und Fortschritt sehen'
-                : 'Start a plan and see your progress',
+            tr(c, 'Trainingspläne', 'Training plans'),
+            tr(c, 'Plan starten und Fortschritt sehen',
+                'Start a plan and see your progress'),
             () => Navigator.of(c).push(MaterialPageRoute<void>(
                 builder: (_) => TrainingPlansScreen(weightKg: d.weightKg)))),
       ),

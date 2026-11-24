@@ -2806,7 +2806,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       cards.add(SignalCard(LucideIcons.heart, C.red,
           l?.homeHeartRate ?? 'Heart rate', '$live',
           unit: 'bpm',
-          sub: 'Aktuell',
+          sub: tr(c, 'Aktuell', 'Now'),
           onTap: () => go(c, detail('resting_hr'))));
     } else {
     add(
@@ -2874,12 +2874,15 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     String signed(double v, int dp) =>
         '${v >= 0 ? '+' : ''}${displayFixed(v, dp)}';
     const none = '–';
-    cards.add(SignalCard(LucideIcons.wind, C.blue, 'Atmung',
+    cards.add(SignalCard(LucideIcons.wind, C.blue, tr(c, 'Atmung', 'Breathing'),
         d.respRate == null ? none : displayFixed(d.respRate!, 1),
         unit: d.respRate == null ? '' : '/min',
-        sub: d.respRate == null ? 'Keine Daten' : 'Letzte Nacht',
+        sub: d.respRate == null
+            ? tr(c, 'Keine Daten', 'No data')
+            : tr(c, 'Letzte Nacht', 'Last night'),
         onTap: () => go(c, detail('resp_rate'))));
-    cards.add(SignalCard(LucideIcons.thermometer, C.orange, 'Körpertemperatur',
+    cards.add(SignalCard(LucideIcons.thermometer, C.orange,
+        tr(c, 'Körpertemperatur', 'Body temperature'),
         d.skinDevC != null
             ? signed(d.skinDevC!, 1)
             : d.skinZ != null
@@ -2887,15 +2890,17 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                 : none,
         unit: d.skinDevC != null ? '°C' : '',
         sub: d.skinDevC != null
-            ? 'vs. normal'
+            ? tr(c, 'vs. normal', 'vs. usual')
             : d.skinZ != null
-                ? 'Abweichung (relativ)'
-                : 'Keine Daten',
+                ? tr(c, 'Abweichung (relativ)', 'Deviation (relative)')
+                : tr(c, 'Keine Daten', 'No data'),
         onTap: () => go(c, detail('skin_temp'))));
     cards.add(SignalCard(LucideIcons.activity, C.purple, 'HRV',
         d.hrvMs == null ? none : '${d.hrvMs!.round()}',
         unit: d.hrvMs == null ? '' : 'ms',
-        sub: d.hrvMs == null ? 'Keine Daten' : 'Letzte Nacht',
+        sub: d.hrvMs == null
+            ? tr(c, 'Keine Daten', 'No data')
+            : tr(c, 'Letzte Nacht', 'Last night'),
         onTap: () => go(c, detail('hrv'))));
     add(
       d.calories,
@@ -3149,10 +3154,14 @@ Widget healthDoor(BuildContext c, HomeData d) {
   final p = P.of(c);
   final l = AppLocalizations.of(c);
   final (Color col, String sub) = switch (d.illnessState) {
-    'red' => (C.red, 'Ruhepuls mehrere Nächte erhöht'),
-    'amber' => (C.orange, 'Letzte Nacht außerhalb deines Normalbereichs'),
-    'green' => (C.green, 'Alles in deinem Normalbereich'),
-    _ => (C.domHealth, 'Vitalwerte, Trends und Kopf'),
+    'red' => (C.red, tr(c, 'Ruhepuls mehrere Nächte erhöht',
+        'Resting heart rate up for several nights')),
+    'amber' => (C.orange, tr(c, 'Letzte Nacht außerhalb deines Normalbereichs',
+        'Last night outside your normal range')),
+    'green' => (C.green, tr(c, 'Alles in deinem Normalbereich',
+        'Everything in your normal range')),
+    _ => (C.domHealth, tr(c, 'Vitalwerte, Trends und Kopf',
+        'Vitals, trends and mind')),
   };
   final title = l?.tabHealth ?? 'Health';
   return Surface(

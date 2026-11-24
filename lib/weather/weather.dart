@@ -55,32 +55,38 @@ class TodayWeather {
     );
   }
 
-  /// The WMO weather code in German.
-  String get description => switch (code) {
-        0 => 'Klar',
-        1 || 2 => 'Leicht bewölkt',
-        3 => 'Bewölkt',
-        45 || 48 => 'Nebel',
-        51 || 53 || 55 || 56 || 57 => 'Nieselregen',
-        61 || 63 || 65 || 66 || 67 || 80 || 81 || 82 => 'Regen',
-        71 || 73 || 75 || 77 || 85 || 86 => 'Schnee',
-        95 || 96 || 99 => 'Gewitter',
-        _ => 'Wechselhaft',
+  /// The WMO weather code in words, German when [de], else English.
+  String description({bool de = true}) => switch (code) {
+        0 => de ? 'Klar' : 'Clear',
+        1 || 2 => de ? 'Leicht bewölkt' : 'Partly cloudy',
+        3 => de ? 'Bewölkt' : 'Cloudy',
+        45 || 48 => de ? 'Nebel' : 'Fog',
+        51 || 53 || 55 || 56 || 57 => de ? 'Nieselregen' : 'Drizzle',
+        61 || 63 || 65 || 66 || 67 || 80 || 81 || 82 => de ? 'Regen' : 'Rain',
+        71 || 73 || 75 || 77 || 85 || 86 => de ? 'Schnee' : 'Snow',
+        95 || 96 || 99 => de ? 'Gewitter' : 'Thunderstorm',
+        _ => de ? 'Wechselhaft' : 'Changeable',
       };
 }
 
-/// The short tips under the weather. Empty on an ordinary day.
-List<String> weatherHints(TodayWeather w) => [
+/// The short tips under the weather, German when [de], else English. Empty
+/// on an ordinary day.
+List<String> weatherHints(TodayWeather w, {bool de = true}) => [
       if (w.uvMax >= 5)
-        'Creme dich ein – UV-Index bis ${w.uvMax.round()}.',
+        de
+            ? 'Creme dich ein – UV-Index bis ${w.uvMax.round()}.'
+            : 'Put on sunscreen – UV index up to ${w.uvMax.round()}.',
       if (w.min <= 1 && (w.rainMm > 0 || w.snowCm > 0))
-        'Heute kann es glatt und rutschig werden.'
+        de
+            ? 'Heute kann es glatt und rutschig werden.'
+            : 'It may get icy and slippery today.'
       else if (w.snowCm > 0)
-        'Heute schneit es.',
+        de ? 'Heute schneit es.' : 'Snow today.',
       if (w.rainChance >= 50 || w.rainMm >= 1)
-        'Nimm einen Regenschirm mit.',
-      if (w.max <= 8 || w.feelsLike <= 3) 'Zieh dich warm an.',
-      if (w.gustKmh >= 50) 'Heute wird es windig.',
+        de ? 'Nimm einen Regenschirm mit.' : 'Take an umbrella.',
+      if (w.max <= 8 || w.feelsLike <= 3)
+        de ? 'Zieh dich warm an.' : 'Dress warmly.',
+      if (w.gustKmh >= 50) de ? 'Heute wird es windig.' : 'Windy today.',
     ];
 
 /// Today's weather here, or null when location or network say no.

@@ -106,7 +106,7 @@ class _MorningSheetState extends State<_MorningSheet> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x4),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Guten Morgen', style: F.t2.copyWith(color: p.ink)),
+          Text(tr(c, 'Guten Morgen', 'Good morning'), style: F.t2.copyWith(color: p.ink)),
           const SizedBox(height: S.x4),
           FutureBuilder<TodayWeather?>(
             future: _weather,
@@ -122,17 +122,17 @@ class _MorningSheetState extends State<_MorningSheet> {
           MoodPicker(
             value: _mood,
             onChanged: (v) => setState(() => _mood = v),
-            title: 'Wie fühlst du dich?',
+            title: tr(c, 'Wie fühlst du dich?', 'How do you feel?'),
           ),
           const SizedBox(height: S.x3),
           MoodPicker(
             value: _sleep,
             onChanged: (v) => setState(() => _sleep = v),
-            title: 'Wie hast du geschlafen?',
+            title: tr(c, 'Wie hast du geschlafen?', 'How did you sleep?'),
           ),
           const SizedBox(height: S.x4),
           BigButton(
-            'Speichern',
+            tr(c, 'Speichern', 'Save'),
             icon: LucideIcons.check,
             color: C.domMind,
             onTap: _mood == null && _sleep == null
@@ -141,7 +141,7 @@ class _MorningSheetState extends State<_MorningSheet> {
           ),
           TextButton(
             onPressed: () => Navigator.of(c).pop(),
-            child: const Text('Später'),
+            child: Text(tr(c, 'Später', 'Later')),
           ),
         ]),
       ),
@@ -168,7 +168,8 @@ class WeatherBox extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
-    final hints = weatherHints(w);
+    final de = Localizations.localeOf(c).languageCode == 'de';
+    final hints = weatherHints(w, de: de);
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -178,12 +179,12 @@ class WeatherBox extends StatelessWidget {
           const SizedBox(width: S.x3),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(w.description,
+              Text(w.description(de: de),
                   style: F.body
                       .copyWith(color: p.ink, fontWeight: FontWeight.w600)),
               Text(
                   '${w.min.round()}° / ${w.max.round()}° · '
-                  'Regen ${w.rainChance}% · UV ${w.uvMax.round()}',
+                  '${tr(c, 'Regen', 'Rain')} ${w.rainChance}% · UV ${w.uvMax.round()}',
                   style: F.cap.copyWith(color: p.ink3)),
             ]),
           ),

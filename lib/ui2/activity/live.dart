@@ -39,6 +39,7 @@ import '../screens/home_screen.dart' show unitsOf;
 import '../charts.dart';
 import '../grammar.dart';
 import '../paint_activity.dart';
+import '../plus_text.dart';
 import '../theme.dart';
 import 'catalogue.dart';
 import 'exercise_picker.dart';
@@ -1677,7 +1678,7 @@ class _LiveStrengthState extends State<LiveStrength> {
         if (index < plan.length - 1) ...[
           const SizedBox(height: S.x3),
           BigButton(
-              '${Localizations.localeOf(c).languageCode == 'de' ? 'Weiter' : 'Next'}: '
+              '${tr(c, 'Weiter', 'Next')}: '
               '${exerciseByKey(plan[index + 1])?.labelFor(Localizations.localeOf(c).languageCode) ?? plan[index + 1]}',
               icon: LucideIcons.chevronRight,
               color: C.purple,

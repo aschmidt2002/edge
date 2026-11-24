@@ -16,6 +16,7 @@ import 'profile/devices.dart' show MyDevices;
 import 'profile/profile.dart' show ProfileAvatar;
 import 'screens/home_screen.dart' show go, lowBattery;
 import 'screens/metric_detail.dart' show DayNav, dayNavLabel;
+import 'plus_text.dart';
 import 'theme.dart';
 
 /// Edge+: the Sleep tab's header, which the live guides anchor on now that
@@ -109,13 +110,16 @@ class _BandStatusIconState extends State<BandStatusIcon> {
     final pct = r?.pct;
     final low = pct != null && lowBattery(pct, r?.charging ?? false);
     final word = switch (link) {
-      BandLink.fresh => 'Band verbunden, aktuell',
-      BandLink.stale => 'Band verbunden, letzte Daten älter als 5 Minuten',
-      BandLink.none => 'Band empfängt keine Daten',
+      BandLink.fresh => tr(c, 'Band verbunden, aktuell', 'Band connected, up to date'),
+      BandLink.stale => tr(c, 'Band verbunden, letzte Daten älter als 5 Minuten',
+          'Band connected, last data older than 5 minutes'),
+      BandLink.none => tr(c, 'Band empfängt keine Daten', 'Band is not sending data'),
     };
     return Pressable(
       semanticLabel:
-          pct == null ? word : '$word. Akku ${pct.round()} Prozent',
+          pct == null
+              ? word
+              : '$word. ${tr(c, 'Akku', 'Battery')} ${pct.round()} ${tr(c, 'Prozent', 'percent')}',
       onTap: r == null ? null : () => go(c, const MyDevices()),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         SizedBox(
