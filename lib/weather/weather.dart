@@ -111,7 +111,8 @@ Future<TodayWeather?> fetchTodayWeather() {
 Future<TodayWeather?>? _memo;
 int? _memoDay;
 
-const _kLat = 'plus.weather_lat', _kLon = 'plus.weather_lon';
+const _kLat = 'plus.weather_lat';
+const _kLon = 'plus.weather_lon';
 
 Future<(double, double)?> _position() async {
   try {
