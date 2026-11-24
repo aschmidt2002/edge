@@ -30,8 +30,9 @@ String _exLabel(BuildContext c, String key) =>
 String _num(BuildContext c, double v, {bool sign = false}) {
   final r = (v * 10).round() / 10;
   var s = r == r.roundToDouble() ? r.toInt().toString() : r.toStringAsFixed(1);
-  if (Localizations.localeOf(c).languageCode == 'de')
+  if (Localizations.localeOf(c).languageCode == 'de') {
     s = s.replaceAll('.', ',');
+  }
   return sign && r > 0 ? '+$s' : s;
 }
 
