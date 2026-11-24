@@ -17,9 +17,11 @@ void main() { setUpAll(() => r2OpenDb('guide_r2_interaction.db')); tearDownAll(L
     // # catches: retaining the old large-card dim exception or leaking a real tap.
     testWidgets('r3 $id navigation target makes a card outside the window a noninteractive placeholder', (t) async {
       final m = await pumpR2Scene(t, r2Scenes.firstWhere((s) => s.guide == id && s.step == 'open-history')); try {
-        await settleLiveGuide(t, frames: 18); await t.tap(find.text('Training plans'), warnIfMissed: false);
+        await settleLiveGuide(t, frames: 18);
+        // Edge+: the recovery card sits above the week, so Training is scrolled to first.
+        await t.ensureVisible(find.text('Training plans')); await t.pump(); await t.tap(find.text('Training plans'), warnIfMissed: false);
         await settleLiveGuide(t, frames: 16); expect(find.byType(TrainingPlansScreen), findsNothing); expect(m.run.currentStep?.id, 'open-history'); m.removeOverlay(); await t.pump();
-        await t.tap(find.text('Training plans')); await settleLiveGuide(t, frames: 16);
+        await t.ensureVisible(find.text('Training plans')); await t.pump(); await t.tap(find.text('Training plans')); await settleLiveGuide(t, frames: 16);
         expect(find.byType(TrainingPlansScreen), findsOneWidget, reason: 'the original control works after the guide ends'); } finally { await disposeR2(t, m); } }); }
   // WHY: passing input through must preserve the exact real callback count.
   // # catches: W2 redirected advance, forwarding a synthetic tap in addition to the original pointer,

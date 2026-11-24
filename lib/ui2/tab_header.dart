@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../state/app_state.dart';
 import 'grammar.dart';
+import 'experimental/health_level.dart' show HealthReportButton;
 import 'profile/devices.dart' show MyDevices;
 import 'profile/profile.dart' show ProfileAvatar;
 import 'screens/home_screen.dart' show go, lowBattery;
@@ -161,12 +162,16 @@ class TabHeader extends StatelessWidget {
   final ValueChanged<String>? onDay;
   final Color accent;
 
+  /// Edge+: the mini health report button beside the avatar (Home only).
+  final bool report;
+
   const TabHeader({
     super.key,
     required this.day,
     this.days = const [],
     this.onDay,
     this.accent = C.domHome,
+    this.report = false,
   });
 
   @override
@@ -197,6 +202,10 @@ class TabHeader extends StatelessWidget {
                 ),
         ),
         const SizedBox(width: S.x2),
+        if (report) ...[
+          const HealthReportButton(),
+          const SizedBox(width: S.x1),
+        ],
         SizedBox(
             width: 44, child: Center(child: ProfileAvatar(accent: accent))),
       ]),

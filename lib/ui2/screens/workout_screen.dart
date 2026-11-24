@@ -40,6 +40,7 @@ import '../activity/day_strain.dart';
 import '../activity/live.dart';
 import '../activity/picker.dart';
 import '../activity/progress.dart' show ProgressSection;
+import '../activity/recovery_card.dart' show RecoveryCard;
 import '../activity/poster.dart' show PosterStatRow;
 import '../activity/setup.dart';
 import '../activity/summary.dart';
@@ -259,6 +260,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);
     return [
+      // Edge+: recovery first, as one ring with its four inputs around it.
+      const RecoveryCard(),
+      const SizedBox(height: S.x3),
       // Edge+: the week first, History beside it, Start below.
       IntrinsicHeight(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

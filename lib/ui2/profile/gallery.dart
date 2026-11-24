@@ -47,6 +47,7 @@ import '../../models/metric.dart';
 import '../../models/activity_suggestion.dart';
 import '../screens/detected_activities.dart';
 import '../screens/slot_scrub.dart';
+import '../activity/recovery_card.dart' show RecoveryRing;
 import '../activity/catalogue.dart';
 import '../activity/live.dart';
 import '../activity/picker.dart' show ActivityPicker, ActivityRow;
@@ -170,6 +171,9 @@ Map<String, Widget> componentCases() => {
       // screen which can say more — including the one absence nothing
       // explained, which says exactly that.
       'rings_absent': const RingTrio(d: _ringsAbsent),
+      // Edge+: Activity's recovery ring with its four bubbles.
+      'recovery_ring': const RecoveryRing(d: _ringsMeasured, stress: 1.3),
+      'recovery_ring_absent': const RecoveryRing(d: _ringsAbsent),
       // The ONE card, both faces: the map as the background, and a photograph
       // as the background with the route dissolved into its corner.
       'share_card': _shareCard(photo: false),
