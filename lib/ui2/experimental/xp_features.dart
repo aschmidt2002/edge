@@ -120,7 +120,7 @@ Widget xpBar(BuildContext c, String label, double frac, String value,
       ]),
       const SizedBox(height: S.x1),
       ClipRRect(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: R.rSm,
         child: LinearProgressIndicator(
           value: frac.clamp(0.0, 1.0),
           minHeight: 8,
@@ -148,7 +148,7 @@ Widget xpStrip(BuildContext c, List<double> values, double max,
                 margin: const EdgeInsets.symmetric(horizontal: .5),
                 height: 6 + 84 * (v / max).clamp(0.0, 1.0),
                 decoration: BoxDecoration(
-                    color: colorOf(v), borderRadius: BorderRadius.circular(2)),
+                    color: colorOf(v), borderRadius: R.rSm),
               ),
             ),
         ]),
@@ -276,7 +276,7 @@ class _SleepPlannerCardState extends State<SleepPlannerCard> {
               setState(() {});
             },
             child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(tr(c, 'Wecker', 'Wake up'), style: F.cap.copyWith(color: p.ink2)),
+              Text(tr(c, 'Aufstehen um', 'Wake up at'), style: F.cap.copyWith(color: p.ink2)),
               Text(
                   '${two(wake.hour)}:${two(wake.minute)}',
                   style: F.n24.copyWith(color: p.on(C.blue))),
@@ -289,7 +289,7 @@ class _SleepPlannerCardState extends State<SleepPlannerCard> {
               c,
               'Schlafbedarf ${hmText(need)}${_need == null ? ' (Standard)' : ''}, '
                   'Effizienz ${(eff * 100).round()} %, ~$latency min zum Einschlafen. '
-                  'Tippe auf die Weckzeit, um sie zu ändern.',
+                  'Tippe auf die Aufstehzeit, um sie zu ändern.',
               'Sleep need ${hmText(need)}${_need == null ? ' (default)' : ''}, '
                   'efficiency ${(eff * 100).round()} %, ~$latency min to fall asleep. '
                   'Tap the wake time to change it.'),

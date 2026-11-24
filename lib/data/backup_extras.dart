@@ -14,6 +14,10 @@ const Map<String, String> kPrefsNotBackedUp = {
   // Edge+: which day the check-ins last showed; a restore should ask again.
   'plus_checkin_morning_day': 'per-phone once-a-day marker for the morning check-in',
   'plus_checkin_evening_day': 'per-phone once-a-day marker for the evening check-in',
+  // Edge+: work mode is a running session on this phone, not a setting.
+  'xp.workmode.on': 'work mode runs on this phone; a restore must not start it',
+  'xp.workmode.since': 'start of this phone\'s work-mode session',
+  'xp.workmode.last': 'last work-mode buzz on this phone',
   'install_device_id': 'identifies this install; a restore must not clone it',
   'paired_remote_id': 'BLE address bonded to this phone; pair again',
   'paired_serial': 'identity mirror of the band paired to this phone',
@@ -101,6 +105,10 @@ class ImportSummary extends MapView<String, int> {
 /// backed-up key missing here is written as-is; the guard test keeps this
 /// table complete. Keys in [kPrefsNotBackedUp] need no entry.
 const Map<String, String> kPrefTypes = {
+  // Edge+ experiments: JSON settings (goals, weekly plan, wake time).
+  'xp.goals': 'string',
+  'xp.weekplan': 'string',
+  'xp.sleepplan': 'string',
   'activity.nap_auto_log_since_sec': 'int',
   'ai.journal_done_day': 'string',
   'ai_evening_enabled': 'bool',

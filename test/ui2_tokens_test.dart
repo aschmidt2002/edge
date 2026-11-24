@@ -73,7 +73,10 @@ final _rules = <_Rule>[
     // beats.dart's wall-clock math does.
     // Edge+: tab_header's 30 s tick re-reads the five-minute band status;
     // a clock, not an animation.
-    allow: {_tokenFile, 'lib/ui2/screens/home_screen.dart', 'lib/ui2/tab_header.dart'},
+    // Edge+: the experiments do calendar math (windows of days, a 45 min work
+    // mode tick), never an animation.
+    allow: {_tokenFile, 'lib/ui2/screens/home_screen.dart', 'lib/ui2/tab_header.dart',
+        'lib/ui2/experimental/xp_core.dart', 'lib/ui2/experimental/xp_features.dart'},
   ),
   _Rule(
     'raw gesture detector',
@@ -197,6 +200,8 @@ const _notComponents = {
   // Edge+: the tab header reads AppState (band link, battery) and pushes;
   // Home and Sleep carry it on every golden that matters.
   'TabHeader', 'BandStatusIcon',
+  // Edge+ experiments: each reads the database or AppState on build.
+  'XpScreen', 'SleepPlannerCard', 'WorkModeTile', 'ExperimentalSection',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
