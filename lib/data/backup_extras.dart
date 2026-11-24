@@ -108,6 +108,7 @@ const Map<String, String> kPrefTypes = {
   'edgeplus.training_plans': 'string', // Edge+: the user's training plans
   'edgeplus.meal_plan.v1': 'string', // Edge+: the week's meal plan
   'edgeplus.shopping_checked.v1': 'string', // Edge+: ticked shopping items
+  'edgeplus.custom_recipes.v1': 'string', // Edge+: the user's own recipes
   'edgeplus.oralb.device': 'string', // Edge+: the paired Oral-B brush
   'edgeplus.oralb.name': 'string',
   'edgeplus.oralb.sessions.v1': 'string', // Edge+: heard brushing sessions

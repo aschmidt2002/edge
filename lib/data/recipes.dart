@@ -5,6 +5,13 @@
 // typed per recipe: it is summed from the ingredients' per-100 g values
 // (rounded table values, BLS/USDA order of magnitude), so a recipe and its
 // shopping list can never disagree. An estimate, like every typed number.
+//
+// Recipes the user writes live in Prefs (CustomRecipes) and use the same
+// ingredient table, so they land on the shopping list like the built-in ones.
+
+import 'dart:convert';
+
+import '../state/prefs.dart';
 
 /// Shopping-list aisles, in the order a list is printed.
 enum Aisle { produce, chilled, meat, pantry, spices }
@@ -153,6 +160,50 @@ class Recipe {
   final String id;
   final String name;
 
+  bool get custom => id.startsWith('u');
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'name': name,
+        'meals': meals,
+        'servings': servings,
+        'minutes': minutes,
+        'items': [for (final i in items) [i.key, i.g]],
+        'steps': steps,
+      };
+
+  static Recipe? fromJson(Object? m) {
+    if (m is! Map) return null;
+    final id = m['id'], name = m['name'];
+    if (id is! String || name is! String) return null;
+    final items = <RecipeItem>[
+      for (final i in (m['items'] is List ? m['items'] as List : const []))
+        if (i is List &&
+            i.length == 2 &&
+            i[0] is String &&
+            kIngredients.containsKey(i[0]) &&
+            i[1] is num)
+          RecipeItem(i[0] as String, (i[1] as num).toDouble()),
+    ];
+    return Recipe(
+      id: id,
+      name: name,
+      meals: [
+        for (final x in (m['meals'] is List ? m['meals'] as List : const []))
+          if (x is String) x,
+      ],
+      servings: m['servings'] is int && (m['servings'] as int) > 0
+          ? m['servings'] as int
+          : 1,
+      minutes: m['minutes'] is int ? m['minutes'] as int : 0,
+      items: items,
+      steps: [
+        for (final x in (m['steps'] is List ? m['steps'] as List : const []))
+          if (x is String) x,
+      ],
+    );
+  }
+
   /// Which of `kMeals` it suits, first is the main one.
   final List<String> meals;
   final int servings;
@@ -185,10 +236,51 @@ Nutrients perServing(Recipe r) {
 }
 
 Recipe? recipeById(String? id) {
-  for (final r in kRecipes) {
+  for (final r in allRecipes()) {
     if (r.id == id) return r;
   }
   return null;
+}
+
+/// The user's own recipes first, then the built-in book.
+List<Recipe> allRecipes() => [...CustomRecipes.load(), ...kRecipes];
+
+/// Recipes the user wrote, as JSON in Prefs.
+class CustomRecipes {
+  CustomRecipes._();
+
+  static const _key = 'edgeplus.custom_recipes.v1';
+
+  static List<Recipe> load() {
+    final raw = Prefs.getString(_key, '');
+    if (raw.isEmpty) return [];
+    try {
+      final v = jsonDecode(raw);
+      return v is List ? [for (final r in v) ?Recipe.fromJson(r)] : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static void _save(List<Recipe> rs) =>
+      Prefs.setString(_key, jsonEncode([for (final r in rs) r.toJson()]));
+
+  /// Insert or replace by id.
+  static void put(Recipe r) {
+    final rs = load();
+    final i = rs.indexWhere((x) => x.id == r.id);
+    if (i < 0) {
+      rs.insert(0, r);
+    } else {
+      rs[i] = r;
+    }
+    _save(rs);
+  }
+
+  static void delete(String id) =>
+      _save([for (final r in load()) if (r.id != id) r]);
+
+  static String newId() => 'u${DateTime.now().microsecondsSinceEpoch}';
 }
 
 /// "120 g", "250 ml", "2 Stück (120 g)", or "" for a to-taste item.

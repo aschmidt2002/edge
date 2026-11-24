@@ -95,9 +95,6 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     _ => null,
   };
 
-  /// Search over everything ever logged, not just the last five.
-  final _query = TextEditingController();
-  bool _hasHistory = false;
 
   final _label = TextEditingController();
   final _kcal = TextEditingController();
@@ -111,8 +108,6 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   /// arithmetic themselves.
   final _portion = TextEditingController();
 
-  List<FoodEntry> _recent = const [];
-  late bool _detail = _editing != null;
 
   /// The last scan's product, when it produced one. Holds the per-100 g
   /// figures the portion field rescales from, and its barcode becomes the
@@ -136,10 +131,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   void initState() {
     super.initState();
     final e = _editing;
-    if (e == null) {
-      _loadRecent();
-      _query.addListener(_loadRecent);
-    } else {
+    if (e != null) {
       _label.text = e.label;
       _kcal.text = _plain(e.kcal);
       _protein.text = _plain(e.proteinG);
@@ -170,7 +162,6 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   void dispose() {
     _portion.removeListener(_rescale);
     for (final t in [
-      _query,
       _label,
       _kcal,
       _protein,
@@ -185,17 +176,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     super.dispose();
   }
 
-  Future<void> _loadRecent() async {
-    final q = _query.text.trim();
-    final db = await LocalDb.instance;
-    final r = await NutritionDb.recent(db, limit: q.isEmpty ? 5 : 25, query: q);
-    // A slower answer to an older query must not replace a newer one.
-    if (!mounted || q != _query.text.trim()) return;
-    setState(() {
-      _recent = r;
-      if (r.isNotEmpty) _hasHistory = true;
-    });
-  }
+
 
   /// Set while a write is in flight and kept through the pop that follows:
   /// a second tap before the sheet closes would otherwise insert the same
@@ -313,6 +294,26 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
       Navigator.of(context).pop(true);
       return;
     }
+    if (pick.repeat case final r?) {
+      await _write(FoodEntry(
+        id: NutritionDb.newId(),
+        date: _date,
+        meal: _meal,
+        label: r.label,
+        atTs: _atTs,
+        foodKey: r.foodKey,
+        quantity: r.quantity,
+        unit: r.unit,
+        kcal: r.kcal,
+        proteinG: r.proteinG,
+        carbsG: r.carbsG,
+        fatG: r.fatG,
+        fibreG: r.fibreG,
+        source: FoodSource.repeat,
+        confirmed: r.confirmed,
+      ));
+      return;
+    }
     final n = pick.nutrients;
     await _write(FoodEntry(
       id: NutritionDb.newId(),
@@ -394,7 +395,6 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
       _estimating = true;
       _ai = ai.$1;
       _photoError = null;
-      _detail = true;
     });
     try {
       final est = await estimateFoodPhotoWith(
@@ -642,19 +642,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     };
   }
 
-  /// What basis the boxes are on. The pack's own serving is named when the
-  /// record states one, because "33 g" beside a 400 g jar is the difference
-  /// between a spoonful and a fortnight.
-  String _portionNote(BuildContext c, OffProduct p) {
-    final l = AppLocalizations.of(c);
-    final base = l?.logFoodPortionNoteBase ??
-        'Open Food Facts lists this per 100 g. Change the portion and '
-            'the numbers follow.';
-    if (p.servingLabel.isEmpty && p.servingG == null) return base;
-    final serving =
-        p.servingLabel.isNotEmpty ? p.servingLabel : '${_plain(p.servingG)} g';
-    return l?.logFoodPortionNoteServing(serving) ?? '$base The pack’s own serving is $serving.';
-  }
+
 
   void _fillFrom(OffProduct p, double grams) {
     final v = p.forPortion(grams);
@@ -694,23 +682,6 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                      _editing != null
-                          ? (l?.logFoodEditTitle ?? 'Edit this entry')
-                          : (l?.logFoodTitle ?? 'Log an eating occasion'),
-                      style: F.t2.copyWith(color: p.ink)),
-                ),
-                Pressable(
-                  semanticLabel: l?.logFoodClose ?? 'Close',
-                  onTap: () => Navigator.of(c).pop(),
-                  child: Icon(LucideIcons.x, size: 20, color: p.ink3),
-                ),
-              ],
-            ),
-            const SizedBox(height: S.x4),
-            Row(
-              children: [
                 for (final m in kMeals) ...[
                   Expanded(
                     child: Pressable(
@@ -742,11 +713,15 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
               pad: const EdgeInsets.symmetric(horizontal: S.x4),
               child: Column(
                 children: [
-                  SetRow(LucideIcons.calendar, C.domFood,
-                      l?.logFoodDateLabel ?? 'Date',
-                      value: dayLabel(DateTime.tryParse(_date) ?? DateTime.now(),
-                          l: l),
-                      onTap: _pickDate),
+                  // Edge+: the day comes from the day picked on the tab; only
+                  // an edit can move an entry to another day.
+                  if (_editing != null)
+                    SetRow(LucideIcons.calendar, C.domFood,
+                        l?.logFoodDateLabel ?? 'Date',
+                        value: dayLabel(
+                            DateTime.tryParse(_date) ?? DateTime.now(),
+                            l: l),
+                        onTap: _pickDate),
                   SetRow(LucideIcons.clock, C.domFood,
                       l?.logFoodTimeLabel ?? 'Time',
                       value: _time == null
@@ -757,135 +732,39 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
               ),
             ),
             if (_editing == null) ...[
-            const SizedBox(height: S.x5),
-            BigButton(
-              l?.logFoodIAte(_mealLabel(c, _meal)) ??
-                  'I ate ${_mealLabel(c, _meal).toLowerCase()}',
-              icon: LucideIcons.check,
-              color: C.domFood,
-              onTap: () => _write(_base(label: _mealLabel(c, _meal))),
-            ),
-            const SizedBox(height: S.x3),
-            Surface(
-              pad: const EdgeInsets.symmetric(horizontal: S.x4),
-              child: SetRow(
-                LucideIcons.camera,
-                C.domFood,
-                tr(c, 'Foto vom Essen', 'Photo of the meal'),
-                chevron: false,
-                onTap: _estimating ? null : _takePhoto,
-              ),
-            ),
-            const SizedBox(height: S.x3),
-            Surface(
-              pad: const EdgeInsets.symmetric(horizontal: S.x4),
-              child: SetRow(
-                LucideIcons.chefHat,
-                C.domFood,
-                tr(c, 'Rezept', 'Recipe'),
-                onTap: _pickRecipe,
-              ),
-            ),
-            ..._photoBlock(c),
-            if (_hasHistory)
-              Section(
-                l?.logFoodAgain ?? 'Again',
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    OsTextField(
-                      controller: _query,
-                      label: l?.logFoodSearchLabel ?? 'Search your foods',
-                      hint: l?.logFoodSearchHint ?? 'Anything you have logged',
-                    ),
-                    const SizedBox(height: S.x3),
-                    if (_recent.isEmpty)
-                      Text(
-                        l?.logFoodSearchNoMatch ??
-                            'Nothing you have logged matches that.',
-                        style: F.cap.copyWith(color: p.ink3),
-                      )
-                    else
-                Surface(
-                  pad: const EdgeInsets.symmetric(horizontal: S.x4),
-                  child: Column(
-                    children: [
-                      for (final r in _recent)
-                        FoodRow(
-                          entry: r,
-                          trailing: LucideIcons.circlePlus,
-                          onTap: () => _write(
-                            FoodEntry(
-                              id: NutritionDb.newId(),
-                              date: _date,
-                              meal: _meal,
-                              label: r.label,
-                              atTs: _atTs,
-                              foodKey: r.foodKey,
-                              quantity: r.quantity,
-                              unit: r.unit,
-                              kcal: r.kcal,
-                              proteinG: r.proteinG,
-                              carbsG: r.carbsG,
-                              fatG: r.fatG,
-                              fibreG: r.fibreG,
-                              source: FoodSource.repeat,
-                              confirmed: r.confirmed,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: S.x5),
-            Pressable(
-              onTap: () => setState(() => _detail = !_detail),
-              child: Row(
-                children: [
-                  Icon(
-                    _detail ? LucideIcons.chevronDown : LucideIcons.chevronRight,
-                    size: 18,
-                    color: p.ink3,
-                  ),
-                  const SizedBox(width: S.x2),
-                  Expanded(
-                    child: Text(
-                      l?.logFoodAddNumbers ?? 'Add the numbers',
-                      style: F.body.copyWith(color: p.ink2),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ],
-            if (_detail) ...[
-              if (_editing == null) ...[
               const SizedBox(height: S.x3),
               Surface(
                 pad: const EdgeInsets.symmetric(horizontal: S.x4),
-                child: SetRow(
-                  LucideIcons.scanBarcode,
-                  C.domFood,
-                  l?.logFoodScanBarcode ?? 'Scan a barcode',
-                  sub: offLookupAllowed
-                      ? (l?.logFoodScanSubOn ??
-                          'Asks openfoodfacts.org about the barcode, and fills '
-                              'in what it can stand behind')
-                      : (l?.logFoodScanSubOff ?? 'Looks the pack up online. Asks first'),
-                  chevron: false,
-                  onTap: _looking ? null : _scan,
-                ),
+                child: Column(children: [
+                  SetRow(
+                    LucideIcons.camera,
+                    C.domFood,
+                    tr(c, 'Foto vom Essen', 'Photo of the meal'),
+                    chevron: false,
+                    onTap: _estimating ? null : _takePhoto,
+                  ),
+                  SetRow(
+                    LucideIcons.chefHat,
+                    C.domFood,
+                    tr(c, 'Rezept', 'Recipe'),
+                    onTap: _pickRecipe,
+                  ),
+                  SetRow(
+                    LucideIcons.scanBarcode,
+                    C.domFood,
+                    l?.logFoodScanBarcode ?? 'Scan a barcode',
+                    chevron: false,
+                    onTap: _looking ? null : _scan,
+                  ),
+                ]),
               ),
-              ],
+              ..._photoBlock(c),
+            ],
               if (_looking) ...[
                 const SizedBox(height: S.x3),
                 StatusCard(
                   l?.logFoodLookingUpTitle ?? 'Looking it up',
-                  l?.logFoodLookingUpBody ??
-                      'The boxes fill as soon as the answer is here.',
+                  '',
                   icon: LucideIcons.scanBarcode,
                 ),
               ] else if (_lookupProblem(c) != null) ...[
@@ -896,18 +775,13 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
               OsTextField(
                 controller: _label,
                 label: l?.logFoodWhatLabel ?? 'What',
-                hint: l?.logFoodWhatHint ?? 'Chicken and rice',
+                hint: _mealLabel(c, _meal),
               ),
               if (_scanned != null) ...[
                 const SizedBox(height: S.x4),
                 _NumberRow(
                   fields: [(l?.logFoodPortionLabel ?? 'Portion', 'g', _portion)],
                   hint: '100',
-                ),
-                const SizedBox(height: S.x2),
-                Text(
-                  _portionNote(c, _scanned!),
-                  style: F.cap.copyWith(color: p.ink3, height: 1.45),
                 ),
               ],
               const SizedBox(height: S.x4),
@@ -916,7 +790,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
                   (l?.logFoodEnergyLabel ?? 'Energy', 'kcal', _kcal),
                   (l?.logFoodProteinLabel ?? 'Protein', 'g', _protein),
                 ],
-                hint: l?.logFoodUnknownHint ?? 'unknown',
+                hint: '–',
               ),
               const SizedBox(height: S.x4),
               _NumberRow(
@@ -924,20 +798,12 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
                   (l?.logFoodCarbsLabel ?? 'Carbs', 'g', _carbs),
                   (l?.logFoodFatLabel ?? 'Fat', 'g', _fat),
                 ],
-                hint: l?.logFoodUnknownHint ?? 'unknown',
+                hint: '–',
               ),
               const SizedBox(height: S.x4),
-              // The week card has always averaged fibre; nothing could enter
-              // it, so the row read "Not recorded" forever.
               _NumberRow(
                 fields: [(l?.logFoodFibreLabel ?? 'Fibre', 'g', _fibre)],
-                hint: l?.logFoodUnknownHint ?? 'unknown',
-              ),
-              const SizedBox(height: S.x3),
-              Text(
-                l?.logFoodBlankHint ??
-                    'A blank number stays blank. Only "What" is needed.',
-                style: F.cap.copyWith(color: p.ink3, height: 1.45),
+                hint: '–',
               ),
               // ODbL asks for attribution "reasonably calculated" to make a
               // viewer aware. It goes HERE, on the screen where the numbers
@@ -948,21 +814,17 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
               ],
               const SizedBox(height: S.x4),
               BigButton(
-                l?.actionSave ?? 'Save',
+                _editing != null
+                    ? (l?.actionSave ?? 'Save')
+                    : (l?.logFoodIAte(_mealLabel(c, _meal)) ??
+                        'I ate ${_mealLabel(c, _meal).toLowerCase()}'),
+                icon: _editing != null ? null : LucideIcons.check,
                 color: C.domFood,
-                soft: true,
                 onTap: () {
-                  final label = _label.text.trim();
-                  // Both used to be a bare return under an enabled-looking
-                  // button: nothing happened, nothing was said, and the typed
-                  // numbers were thrown away by the only control that reacted.
-                  if (label.isEmpty) {
-                    ScaffoldMessenger.of(c).showSnackBar(SnackBar(
-                      content: Text(
-                          l?.logFoodSayWhatFirst ?? 'Say what it was first.'),
-                    ));
-                    return;
-                  }
+                  // Edge+: one button. Nothing typed is the one-tap bare
+                  // occasion, named after the meal, exactly as before.
+                  final typed = _label.text.trim();
+                  final label = typed.isEmpty ? _mealLabel(c, _meal) : typed;
                   final bad = _unreadable(c);
                   if (bad.isNotEmpty) {
                     sayUnreadable(c, bad);
@@ -1022,7 +884,6 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
                   onTap: () => _remove(_editing!),
                 ),
               ],
-            ],
           ],
         ),
       ),
