@@ -356,16 +356,14 @@ void main() {
         unobservedMin: 106, // 486 in bed, 380 watched
       ),
     );
-    expect(find.text('WATCHED'), findsOneWidget);
-    expect(find.text('6h 20m'), findsOneWidget);
-    // Edge+: the label pair carries it, no paragraph.
-    expect(find.text('ASLEEP'), findsOneWidget);
+    // Edge+: the share names the watched time it is out of.
+    expect(find.textContaining('of 6h 20m watched'), findsOneWidget);
   });
 
   testWidgets('a fully observed night says nothing about watching', (t) async {
     await _pump(t, SleepData(day: '2026-05-20', night: _night()));
-    expect(find.text('WATCHED'), findsNothing);
-    expect(find.text('ASLEEP OF THAT'), findsOneWidget);
+    expect(find.textContaining('watched'), findsNothing);
+    expect(find.textContaining('asleep'), findsOneWidget);
   });
 
   // ── SLP-02 · settling time, forced windows only ───────────────────────────
@@ -410,6 +408,26 @@ void main() {
     expect(find.text('≥ 3'), findsOneWidget);
     expect(find.text('LONGEST'), findsOneWidget);
     expect(find.text('2h 42m'), findsOneWidget);
+  });
+
+  // ── Edge+: the stage list under the chart lines REM up over Awake ───────
+
+  testWidgets('the stage list keeps REM above Awake, swatches stacked',
+      (t) async {
+    await _pump(
+      t,
+      SleepData(day: '2026-05-20', night: {
+        ..._night(tst: 420, deep: 80),
+        'light_min': 250,
+        'rem_min': 90,
+        'awake_min': 60,
+      }),
+    );
+    // Range totals do not fit beside the lanes at 390pt: the list shows.
+    double left(String name) => t.getTopLeft(find.text(name).last).dx;
+    expect(left('REM'), left('Awake'));
+    expect(left('Deep'), left('Light'));
+    expect(left('REM'), greaterThan(left('Deep')));
   });
 
   // ── Edge+: the sleep score and its four parts ────────────────────────────
