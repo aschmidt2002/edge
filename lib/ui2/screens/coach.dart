@@ -31,6 +31,8 @@ import '../../ai/briefing.dart' show currentBriefingPeriod;
 import 'package:url_launcher/url_launcher.dart';
 import '../../coach/coach_chatgpt.dart';
 import '../../coach/coach_config.dart';
+import '../../ai/food_photo.dart' show geminiKey, geminiModel;
+import '../../ai/gemini_coach.dart';
 import '../../coach/coach_engine.dart';
 import '../../state/app_state.dart';
 import '../ui2.dart';
@@ -915,6 +917,9 @@ List<_Preset> _presets(BuildContext c) {
   return <_Preset>[
     _Preset('Ollama', local, 'http://localhost:11434/v1', local: true),
     _Preset('LM Studio', local, 'http://localhost:1234/v1', local: true),
+    // Edge+: free key, the same one the meal photo uses.
+    _Preset('Google Gemini', tr(c, 'kostenloser Key', 'free key'),
+        kGeminiOpenAiBase),
     _Preset('OpenAI', 'api.openai.com', 'https://api.openai.com/v1'),
     _Preset('Anthropic', 'api.anthropic.com', 'https://api.anthropic.com/v1'),
     _Preset('OpenRouter', 'openrouter.ai', 'https://openrouter.ai/api/v1'),
@@ -1123,7 +1128,25 @@ class _CoachSetupState extends State<CoachSetup> {
       return;
     }
     _pendingKeyDelete = false;
+    // Edge+: one Gemini key for every AI task.
+    try {
+      await syncGeminiKeyFromCoach(cfg);
+    } catch (_) {}
     if (mounted && nav.canPop()) nav.pop();
+  }
+
+  /// Edge+: picking Gemini brings the shared key (from meal photos) and the
+  /// free-tier model along, so the key is entered only once.
+  Future<void> _fillGemini() async {
+    final k = await geminiKey.read();
+    final m = await geminiModel();
+    if (!mounted || _base.text.trim() != kGeminiOpenAiBase) return;
+    setState(() {
+      if (k != null && _key.text.trim().isEmpty) _key.text = k;
+      if (_model.isEmpty && _search.text.trim().isEmpty) {
+        _model = m;
+      }
+    });
   }
 
   Future<void> _closeBrowser() async {
@@ -1245,6 +1268,7 @@ class _CoachSetupState extends State<CoachSetup> {
           _api = CoachApi.defaultFor(preset.baseUrl);
           _models = const [];
           _model = '';
+          if (preset.baseUrl == kGeminiOpenAiBase) _fillGemini();
         }),
         child: Row(
           children: [

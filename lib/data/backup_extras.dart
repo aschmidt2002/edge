@@ -133,6 +133,7 @@ const Map<String, String> kPrefTypes = {
   'clock_format': 'string',
   'coach_api': 'string',
   'coach_model': 'string',
+  'gemini_model': 'string', // Edge+: Flash or Pro for every AI task
   'coach_timeout_seconds': 'int',
   'coach_use_chatgpt': 'bool',
   'cycle_tracking_enabled': 'bool',
