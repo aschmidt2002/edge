@@ -22,6 +22,9 @@ const _allowlist = {
   // The Android scale presence watcher: one low-power scan, filtered to the
   // paired scale's address, run entirely inside `withScanLock`.
   'lib/ble/scale_presence.dart',
+  // The Oral-B watcher: same shape as the scale, every scan inside
+  // `withScanLock`.
+  'lib/oralb/oralb_watcher.dart',
 };
 
 final _pureComment = RegExp(r'^\s*(///|//|\*|/\*)');
