@@ -73,15 +73,10 @@ final _rules = <_Rule>[
     // beats.dart's wall-clock math does.
     // Edge+: tab_header's 30 s tick re-reads the five-minute band status;
     // a clock, not an animation.
-    // Edge+ experiments: day-window date math and the work-mode reminder
-    // timer (45 min, a double buzz 700 ms apart), no animation in either.
-    allow: {
-      _tokenFile,
-      'lib/ui2/screens/home_screen.dart',
-      'lib/ui2/tab_header.dart',
-      'lib/ui2/experimental/xp_core.dart',
-      'lib/ui2/experimental/xp_features.dart',
-    },
+    // Edge+: the experiments do calendar math (windows of days, a 45 min work
+    // mode tick), never an animation.
+    allow: {_tokenFile, 'lib/ui2/screens/home_screen.dart', 'lib/ui2/tab_header.dart',
+        'lib/ui2/experimental/xp_core.dart', 'lib/ui2/experimental/xp_features.dart'},
   ),
   _Rule(
     'raw gesture detector',
@@ -205,14 +200,12 @@ const _notComponents = {
   // Edge+: the tab header reads AppState (band link, battery) and pushes;
   // Home and Sleep carry it on every golden that matters.
   'TabHeader', 'BandStatusIcon',
+  // Edge+ experiments: each reads the database or AppState on build.
+  'XpScreen', 'SleepPlannerCard', 'WorkModeTile', 'ExperimentalSection',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
   'TrainingPlansScreen', 'TrainingPlanEditor', 'TrainingPlanProgress',
-  // Edge+ experiments: the screen and the Home section read the database and
-  // Prefs; the sleep planner reads last night; the work-mode tile drives a
-  // live timer that buzzes the band.
-  'XpScreen', 'ExperimentalSection', 'SleepPlannerCard', 'WorkModeTile',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to

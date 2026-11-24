@@ -15,7 +15,6 @@ import '../../data/local_repository.dart';
 import '../../state/app_state.dart';
 import '../../state/prefs.dart';
 import '../theme.dart';
-
 import '../plus_text.dart';
 
 
