@@ -187,40 +187,53 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
   Widget _startCard(BuildContext c, _WorkoutData d) {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);
-    return Surface(
-      pad: const EdgeInsets.fromLTRB(S.x4, S.x3, S.x2, S.x3),
-      onTap: () => _openPicker(c, d),
-      semanticLabel: loc?.workoutStartSessionLabel ?? 'Start a session',
-      child: Row(children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration:
-              BoxDecoration(color: p.fill(C.purple), shape: BoxShape.circle),
-          child: Icon(LucideIcons.play, size: 18, color: p.inkOnFill),
+    // The words the guides quote ("Start a session", "History") are the words
+    // on these two controls, so a guide can point at either. History is a card
+    // of its own, so a guide can dim the start card around it.
+    return Row(children: [
+      Expanded(
+        child: Surface(
+          pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
+          onTap: () => _openPicker(c, d),
+          semanticLabel: loc?.workoutStartSessionLabel ?? 'Start a session',
+          child: Row(children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration:
+                  BoxDecoration(color: p.fill(C.purple), shape: BoxShape.circle),
+              child: Icon(LucideIcons.play, size: 18, color: p.inkOnFill),
+            ),
+            const SizedBox(width: S.x3),
+            Expanded(
+              child: Text(
+                  _sentence(loc?.workoutStartSessionLabel ?? 'Start a session'),
+                  style: F.head.copyWith(color: p.ink)),
+            ),
+          ]),
         ),
-        const SizedBox(width: S.x3),
-        // The words the guides quote ("Start a session", "History") are the
-        // words on the card, so a guide can point at them.
-        Expanded(
-          child: Text(_sentence(loc?.workoutStartSessionLabel ?? 'Start a session'),
-              style: F.head.copyWith(color: p.ink)),
-        ),
-        Pressable(
-          onTap: () => setState(() => tab = 2),
-          semanticLabel: loc?.workoutTabHistory ?? 'History',
-          child: Padding(
-            padding: const EdgeInsets.all(S.x2),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
+      ),
+      const SizedBox(width: S.x2),
+      // A Surface takes the full width; this card is as wide as its word.
+      Pressable(
+        onTap: () => setState(() => tab = 2),
+        semanticLabel: loc?.workoutTabHistory ?? 'History',
+        child: GuideBox(
+          card: true,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: S.x3, vertical: S.x3),
+            decoration: BoxDecoration(
+                color: p.card, borderRadius: R.rLg, boxShadow: p.el(1)),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(LucideIcons.history, size: 20, color: p.ink2),
-              const SizedBox(width: S.x1),
+              const SizedBox(height: S.x1),
               Text(loc?.workoutTabHistory ?? 'History',
                   style: F.cap.copyWith(color: p.ink2)),
             ]),
           ),
         ),
-      ]),
-    );
+      ),
+    ]);
   }
 
   /// "START A SESSION" → "Start a session": the label is an overline in caps.

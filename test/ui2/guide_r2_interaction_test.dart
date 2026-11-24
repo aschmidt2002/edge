@@ -6,14 +6,17 @@ import 'package:openstrap_edge/ui2/guides/guide_target.dart'; import '../support
 import '../support/live_guide_stage.dart'; import '../support/guide_r2_scroll_fixture.dart';
 import 'package:openstrap_edge/ui2/guides/guide_step_card.dart'; import 'package:openstrap_edge/ui2/guides/live_guide_overlay.dart';
 import '../support/guide_r2_fixture.dart'; import '../support/guide_r2_scenes.dart'; import '../support/live_guide_harness.dart';
+// Edge+: the start card prints the label in sentence case ("Start a session").
+Finder _startText() => find.byWidgetPredicate((w) => w is Text &&
+    (w.data ?? '').toLowerCase() == r2Locale.workoutStartSessionLabel.toLowerCase());
 void main() { setUpAll(() => r2OpenDb('guide_r2_interaction.db')); tearDownAll(LocalDb.close); for (final id in ['log-past-workout', 'delete-workout']) {
     // WHY: on a tab/sub-tab target every content card is a placeholder.
     // # catches: retaining the old large-card dim exception or leaking a real tap.
     testWidgets('r3 $id navigation target makes Start card a noninteractive placeholder', (t) async {
       final m = await pumpR2Scene(t, r2Scenes.firstWhere((s) => s.guide == id && s.step == 'open-history')); try {
-        await settleLiveGuide(t, frames: 18); await t.tap(find.text(r2Locale.workoutStartSessionLabel));
+        await settleLiveGuide(t, frames: 18); await t.tap(_startText());
         await settleLiveGuide(t, frames: 16); expect(find.byType(ActivityPicker), findsNothing); expect(m.run.currentStep?.id, 'open-history'); m.removeOverlay(); await t.pump();
-        await t.tap(find.text(r2Locale.workoutStartSessionLabel)); await settleLiveGuide(t, frames: 16);
+        await t.tap(_startText()); await settleLiveGuide(t, frames: 16);
         expect(find.byType(ActivityPicker), findsOneWidget, reason: 'the original control works after the guide ends'); } finally { await disposeR2(t, m); } }); }
   // WHY: passing input through must preserve the exact real callback count.
   // # catches: W2 redirected advance, forwarding a synthetic tap in addition to the original pointer,
@@ -41,7 +44,7 @@ void main() { setUpAll(() => r2OpenDb('guide_r2_interaction.db')); tearDownAll(L
         if (n is ScrollUpdateNotification && n.dragDetails != null && n.metrics.axis == Axis.vertical) {
           dragDistance += n.scrollDelta!.abs(); } return false; }, child: const AppMainShell())); try {
       await app.runner.start(r2Guide('log-past-workout'), band: null); await settleLiveGuide(t, frames: 18);
-      final control = find.ancestor(of: find.text(r2Locale.workoutStartSessionLabel),
+      final control = find.ancestor(of: _startText(),
         matching: find.byWidgetPredicate((w) => w is Pressable && w.onTap != null)).first; dragDistance = 0; await t.dragFrom(t.getRect(control).center, const Offset(0, -140));
       expect(dragDistance, greaterThan(20), reason: 'real scroll updates caused by this pointer drag');
       expect(find.byType(ActivityPicker), findsNothing, reason: 'a drag must not be duplicated as a tap'); } finally { app.runner.exit();
