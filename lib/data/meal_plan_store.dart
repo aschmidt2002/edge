@@ -73,10 +73,10 @@ class PlannedMeal {
 class MealPlanStore {
   MealPlanStore._();
 
-  static const key = 'edgeplus.meal_plan.v1';
+  static const mealPlanKey = 'edgeplus.meal_plan.v1';
 
   static Map<String, List<PlannedMeal>> _all() {
-    final raw = Prefs.getString(key, '');
+    final raw = Prefs.getString(mealPlanKey, '');
     if (raw.isEmpty) return {};
     try {
       final m = jsonDecode(raw);
@@ -107,7 +107,7 @@ class MealPlanStore {
     // Days more than two weeks gone are dropped so the blob stays small.
     final cutoff = DateTime.now().subtract(const Duration(days: 14));
     all.removeWhere((d, _) => (DateTime.tryParse(d) ?? cutoff).isBefore(cutoff));
-    Prefs.setString(key, jsonEncode({
+    Prefs.setString(mealPlanKey, jsonEncode({
       for (final e in all.entries) e.key: [for (final p in e.value) p.toJson()],
     }));
   }

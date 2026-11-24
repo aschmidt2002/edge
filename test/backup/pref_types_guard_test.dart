@@ -15,7 +15,7 @@ import 'package:openstrap_edge/data/backup_extras.dart';
 /// "file|expression|type" -> keys the call can read. The table must give each
 /// one that exact type. `*` as the file skips the file check.
 const _dynamicReads = <String, List<String>>{
-  "xp_core.dart|'xp.\$key'|string": ['xp.goals', 'xp.weekplan', 'xp.sleepplan'],
+  "xp_core.dart|'xp.\$key'|string": ['xp.goals', 'xp.weekplan', 'xp.sleepplan', 'xp.fast'],
   'briefing.dart|_slotKey(period|string': ['ai.briefing.morning'],
   'ecg_guard_store.dart|guardKey(serial|bool': ['ecg.guard.S1'],
   'ecg_guard_store.dart|wristKey(serial|string': ['ecg.wrist.S1'],
