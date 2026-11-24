@@ -255,7 +255,10 @@ class _GreetingTempState extends State<GreetingTemp> {
       ),
     );
     ctl.dispose();
-    if (mounted) setState(() => _w = fetchTodayWeather());
+    if (!mounted) return;
+    setState(() {
+      _w = fetchTodayWeather();
+    });
   }
 
   @override
