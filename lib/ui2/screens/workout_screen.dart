@@ -379,13 +379,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
                     shape: BoxShape.circle,
                     color: done
                         ? p.wash(C.green, strength: 1.5)
-                        : (i == today ? p.fill(C.purple) : p.card2)),
+                        : p.card2),
                 child: Icon(
                     done
                         ? LucideIcons.check
                         : (i == today ? LucideIcons.play : null),
                     size: 13,
-                    color: done ? p.on(C.green) : p.inkOnFill),
+                    // Edge+: today is grey, not the Start card's purple.
+                    color: done ? p.on(C.green) : p.ink3),
               ),
             ]),
           );
