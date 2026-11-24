@@ -362,6 +362,18 @@ class GuideNavigation {
     _ => null,
   };
 
+  /// Edge+: Activity has no sub-tab row. Its one switch between the page and
+  /// History is the control labelled History: the History card on the page,
+  /// the back row on History. Null for any other node, or when not on screen.
+  static Element? activitySwitch(Element page, GuideNode node, AppLocalizations l) {
+    if (node != GuideNode.activityOverview && node != GuideNode.activityHistory) return null;
+    final found = GuideTarget.label(ScreenLabel.workoutTabHistory).resolve(page, l);
+    if (found is! TargetFound) return null;
+    return onstageElements(page)
+        .where((e) => identical(laidOutBox(e), found.renderObject))
+        .firstOrNull;
+  }
+
   static TargetFound? entry(Element page, GuideHop hop, AppLocalizations l) {
     if (hop.node == GuideNode.settings) {
       final avatar = onstageElements(page)

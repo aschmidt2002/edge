@@ -20,16 +20,16 @@ LiveGuideOverlayState _overlay(WidgetTester t) => t.state(find.byType(LiveGuideO
       expect(focus.center.dx, inInclusiveRange(0, 390), reason: '$focus');
       expect(focus.overlaps(t.getRect(find.byKey(GuideStepCard.cardKey))), isFalse, reason: 'target/card $focus'); final overlay = _overlay(t);
       // Sub-tabs can be horizontally clipped. Tap the visible part, computed from the real viewport, independently of the overlay's input holes.
-      final point = focus.intersect(t.getRect(find.byType(SubTabs))).center;
+      final point = focus.center; // Edge+: the History card
       expect(overlay.layerHoles.any((r) => r.contains(point)), isTrue); await t.tapAt(point); await settleLiveGuide(t, frames: 18);
       expect(GuideNavigation.location(app.runner.routes.page!), GuideNode.activityHistory); expect(app.runner.activeRun!.currentStep!.id, 'log-past');
       // History reveals its target at the bottom of a lazy page. Scroll back to the navigation row before choosing another sub-tab, as a user does.
       final pageScroll = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down).first;
-      t.state<ScrollableState>(pageScroll).position.jumpTo(0); await settleLiveGuide(t, frames: 18); final tabs = find.byType(SubTabs); final subTabs = t.widget<SubTabs>(tabs);
-      final activities = find.descendant(of: tabs, matching: find.widgetWithText(Pressable, subTabs.items[1])).first;
-      await t.tapAt(t.getRect(activities).intersect(t.getRect(tabs)).center); await settleLiveGuide(t, frames: 18); expect(app.runner.activeRun!.state, isA<GuideOffPath>());
-      final history = find.descendant(of: tabs, matching: find.widgetWithText(Pressable, subTabs.items[2]));
-      expect(t.getRect(liveGuideFocus).contains(t.getRect(history.first).intersect(t.getRect(tabs)).center), isTrue); expect(find.text('1 tap back'), findsOneWidget);
+      t.state<ScrollableState>(pageScroll).position.jumpTo(0); await settleLiveGuide(t, frames: 18); // Edge+: Activity has no sub-tab row; History's back row leaves History, and the History card is the way back.
+      final back = find.widgetWithText(Pressable, r2Locale.workoutTabHistory).first;
+      await t.tapAt(t.getRect(back).center); await settleLiveGuide(t, frames: 18); expect(app.runner.activeRun!.state, isA<GuideOffPath>());
+      final history = find.widgetWithText(Pressable, r2Locale.workoutTabHistory); final tabs = history.first;
+      expect(t.getRect(liveGuideFocus).contains(t.getRect(history.first).center), isTrue); expect(find.text('1 tap back'), findsOneWidget);
       // WHY: P1c / CLAIM(marker-repaint-isolation): the off-path hand still nudges, and a tick builds/paints only inside its own boundary.
       final handFinder = find.byType(GuideHandCursor); expect(handFinder, findsOneWidget); final boundaries = find.ancestor(of: handFinder, matching: find.byType(RepaintBoundary));
       expect(boundaries, findsWidgets, reason: 'the animated hand owns a repaint boundary');
@@ -68,7 +68,7 @@ LiveGuideOverlayState _overlay(WidgetTester t) => t.state(find.byType(LiveGuideO
   // # catches: canonical default-entry paths overstating the actual hop count.
   testWidgets('A: returning to a parked History sub-tab is one tab hop', (t) async { final app = await pumpLiveGuideApp(t); try {
       await app.runner.start(r2Guide('log-past-workout'), band: null); await settleLiveGuide(t, frames: 18);
-      final target = _overlay(t).targetRect!; await t.tapAt(target.intersect(t.getRect(find.byType(SubTabs))).center);
+      final target = _overlay(t).targetRect!; await t.tapAt(target.center);
       await settleLiveGuide(t, frames: 18); expect(app.runner.activeRun!.currentStep!.id, 'log-past');
       await t.tapAt(t.getRect(r2Tab(3)).center); await settleLiveGuide(t, frames: 18);
       expect(app.runner.activeRun!.state, isA<GuideOffPath>()); expect(find.text('1 tap back'), findsOneWidget);
@@ -80,9 +80,10 @@ LiveGuideOverlayState _overlay(WidgetTester t) => t.state(find.byType(LiveGuideO
   // # catches: a walk that selects the tab and stops, leaving a second press to the user.
   testWidgets('R2: one Back to the guide press from Today reaches Activity > Overview with History parked', (t) async {
     final app = await pumpLiveGuideApp(t); try { await app.runner.start(r2Guide('start-workout'), band: null);
-      await settleLiveGuide(t, frames: 18); expect(app.runner.activeRun!.currentStep!.id, 'start-card'); final tabs = find.byType(SubTabs);
-      final items = t.widget<SubTabs>(tabs).items; final history = find.descendant(of: tabs, matching: find.widgetWithText(Pressable, items[2])).first;
-      await t.tapAt(t.getRect(history).intersect(t.getRect(tabs)).center); await settleLiveGuide(t, frames: 18);
+      await settleLiveGuide(t, frames: 18); expect(app.runner.activeRun!.currentStep!.id, 'start-card');
+      // Edge+: History is a card of the page, a placeholder while the guide points at the start
+      // card, so open it the way its own control does (Activity has no sub-tab row any more).
+      t.widget<Pressable>(find.widgetWithText(Pressable, r2Locale.workoutTabHistory).first).onTap!(); await settleLiveGuide(t, frames: 18);
       expect(GuideNavigation.location(app.runner.routes.page!), GuideNode.activityHistory);
       expect(app.runner.activeRun!.state, isA<GuideOffPath>(), reason: 'History is not on this guide\'s path');
       await t.tapAt(t.getRect(r2Tab(0)).center); await settleLiveGuide(t, frames: 18); expect(app.runner.activeRun!.state, isA<GuideOffPath>());
@@ -95,7 +96,7 @@ LiveGuideOverlayState _overlay(WidgetTester t) => t.state(find.byType(LiveGuideO
   // # catches: a walk that selects the tab and returns, leaving the second hop to the user.
   testWidgets('R2: one Back to the guide press from Today reaches Activity > History', (t) async { final app = await pumpLiveGuideApp(t);
     try { await app.runner.start(r2Guide('log-past-workout'), band: null); await settleLiveGuide(t, frames: 18);
-      await t.tapAt(_overlay(t).targetRect!.intersect(t.getRect(find.byType(SubTabs))).center); await settleLiveGuide(t, frames: 18);
+      await t.tapAt(_overlay(t).targetRect!.center); await settleLiveGuide(t, frames: 18);
       expect(app.runner.activeRun!.currentStep!.id, 'log-past'); await t.tapAt(t.getRect(r2Tab(0)).center);
       await settleLiveGuide(t, frames: 18); expect(app.runner.activeRun!.state, isA<GuideOffPath>());
       await t.tap(find.byKey(GuideStepCard.backToGuideKey)); await settleLiveGuide(t, frames: 30);

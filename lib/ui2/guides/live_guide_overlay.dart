@@ -899,6 +899,14 @@ class LiveGuideOverlayState extends State<LiveGuideOverlay> with TickerProviderS
     }
     if (hop?.kind == GuideHopKind.subTab) {
       final index = GuideNavigation.subTabIndex(hop!.node);
+      // Edge+: Activity has no sub-tab row; its History switch is the route.
+      final l = AppLocalizations.of(context);
+      final control = l == null ? null : GuideNavigation.activitySwitch(page, hop.node, l);
+      if (control != null && laidOutBox(control) != null) {
+        backElement = control;
+        back = rectOf(control).intersect(visibleBoundsInRoot(laidOutBox(control)!, root));
+        backIsTab = true;
+      }
       for (final e in onstageElements(page)) {
         if (e.widget is! SubTabs || index == null) continue;
         final controls = onstageElements(

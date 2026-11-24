@@ -24,7 +24,8 @@ class _M0Shell { final nav = GlobalKey<NavigatorState>(); final routes = GuideRo
       home: AppShell(initial: ShellDomain.activity, builder: (context, domain) => switch (domain) { ShellDomain.activity => Column(children: [
           const Padding(padding: EdgeInsets.all(16), child: Text('Shell anchor line', key: _m0Anchor)),
           Pressable(key: _m0Control, onTap: () => controlTaps++, child: const Surface(child: Text('A control'))), ]),
-        ShellDomain.health => Column(children: [Pressable(key: _m0OnHealth, onTap: () {}, child: const Text('Only on Health'))]),
+        // Edge+: the fourth tab button is Nutrition (Health opens from Home).
+        ShellDomain.nutrition => Column(children: [Pressable(key: _m0OnHealth, onTap: () {}, child: const Text('Only on Health'))]),
         _ => const SizedBox.shrink(), }), ))); await t.pump(); if (parkHealth) {
       // Visit Health so its screen stays mounted (parked) under the IndexedStack, then come back.
       await t.tap(_m0Tab(3)); await t.pump(const Duration(milliseconds: 300)); await t.tap(_m0Tab(2)); await t.pump(const Duration(milliseconds: 300)); }

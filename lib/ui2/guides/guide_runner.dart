@@ -244,7 +244,7 @@ class GuideRunner extends ChangeNotifier {
       if (page == null || hop == null) break;
       // The same hop again means the last press changed nothing: stop, don't spin.
       if (previous != null && previous.node == hop.node && previous.kind == hop.kind) break;
-      if (!_makeHop(hop, page)) break;
+      if (!_makeHop(hop, page, l)) break;
       previous = hop;
       moved = true;
       // One frame shows the new screen, the next lets the guide's overlay plan it (its
@@ -268,7 +268,7 @@ class GuideRunner extends ChangeNotifier {
   }
 
   /// Does one hop with the app's own controls; false when it is not one the runner can make.
-  bool _makeHop(GuideHop hop, Element page) {
+  bool _makeHop(GuideHop hop, Element page, AppLocalizations? l) {
     switch (hop.kind) {
       case GuideHopKind.subTab:
         // A real tap on the sub-tab's own control, as a user would make it: no closure of
@@ -280,7 +280,9 @@ class GuideRunner extends ChangeNotifier {
           final controls = onstageElements(e).where((c) => c.widget is Pressable && laidOutBox(c) != null).toList();
           return index < controls.length && _tap(controls[index], page);
         }
-        return false;
+        // Edge+: no sub-tab row on Activity; its History switch is the hop.
+        final control = l == null ? null : GuideNavigation.activitySwitch(page, hop.node, l);
+        return control != null && _tap(control, page);
       case GuideHopKind.tab || GuideHopKind.page:
         final tab = GuideNavigation.tabIndex(hop.node);
         if (tab == null || tab >= ShellDomain.values.length || _shell == null) return false;
