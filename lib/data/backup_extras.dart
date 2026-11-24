@@ -18,9 +18,9 @@ const Map<String, String> kPrefsNotBackedUp = {
   'xp.workmode.on': 'work mode runs on this phone; a restore must not start it',
   'xp.workmode.since': 'start of this phone\'s work-mode session',
   'xp.workmode.last': 'last work-mode buzz on this phone',
-  // Edge+: the morning weather cache and the last place it was asked for.
-  'plus_weather_today': 'today\'s forecast, fetched again on the new phone',
-  'plus_weather_spot': 'last coarse location of this phone',
+  // Edge+: the last place the weather was asked for, on this phone.
+  'plus.weather_lat': 'last coarse location of this phone',
+  'plus.weather_lon': 'last coarse location of this phone',
   'install_device_id': 'identifies this install; a restore must not clone it',
   'paired_remote_id': 'BLE address bonded to this phone; pair again',
   'paired_serial': 'identity mirror of the band paired to this phone',
@@ -113,9 +113,10 @@ const Map<String, String> kPrefTypes = {
   'xp.goals': 'string',
   'xp.weekplan': 'string',
   'xp.sleepplan': 'string',
-  'xp.fast': 'string', // Edge+: the running fast and its goal
   'edgeplus.meal_plan.v1': 'string', // Edge+: the week's meal plan
   'activity.goals': 'string', // Edge+: activity progress goals
+  'plus.fast_start': 'int', // Edge+: the running fast
+  'plus.fast_goal_h': 'int',
   'activity.nap_auto_log_since_sec': 'int',
   'ai.journal_done_day': 'string',
   'ai_evening_enabled': 'bool',

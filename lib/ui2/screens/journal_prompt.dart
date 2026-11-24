@@ -64,6 +64,8 @@ Future<void> maybeShowCheckIn(BuildContext c) async {
           builder: (_) => JournalCompose(evening: true, askSleep: !sleepAsked)));
     } else {
       Prefs.setString(_kMorningKey, today);
+      await warmTodayWeather();
+      if (!c.mounted) return;
       final r = await showModalBottomSheet<(int?, int?)>(
         context: c,
         isScrollControlled: true,
@@ -194,34 +196,6 @@ class WeatherBox extends StatelessWidget {
           Text(h, style: F.cap.copyWith(color: p.ink2)),
         ],
       ]),
-    );
-  }
-}
-
-/// Edge+: the morning's weather on Home, until noon. The check-in sheet
-/// shows it too, but that sheet comes once a day and only when Home opens
-/// from 04:00, so this is where the weather stays put for the morning.
-class MorningWeather extends StatefulWidget {
-  const MorningWeather({super.key});
-
-  @override
-  State<MorningWeather> createState() => _MorningWeatherState();
-}
-
-class _MorningWeatherState extends State<MorningWeather> {
-  final Future<TodayWeather?> _weather = fetchTodayWeather();
-
-  @override
-  Widget build(BuildContext c) {
-    if (DateTime.now().hour >= 12) return const SizedBox.shrink();
-    return FutureBuilder<TodayWeather?>(
-      future: _weather,
-      builder: (c, snap) => snap.data == null
-          ? const SizedBox.shrink()
-          : Padding(
-              padding: const EdgeInsets.only(bottom: S.x3),
-              child: WeatherBox(snap.data!),
-            ),
     );
   }
 }

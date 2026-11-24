@@ -18,8 +18,6 @@ import '../../data/day_label.dart';
 import '../../data/local_repository.dart';
 import '../../state/app_state.dart';
 import '../../state/prefs.dart';
-import '../../gps/route_math.dart' show movingSeconds, totalDistanceMeters;
-import '../../gps/route_models.dart' show RoutePoint;
 import '../activity/catalogue.dart' show exerciseByKey;
 import '../screens/metric_detail.dart' show detailScaffold;
 import '../ui2.dart';
@@ -1170,232 +1168,6 @@ class WorkModeTile extends StatelessWidget {
   }
 }
 
-// ═══ 14 · Erholungszeit ══════════════════════════════════════════════════════
-
-/// Hours a session of [strain] (0–21) asks for before the next hard one,
-/// stretched when the morning's [recovery] (%) was low.
-// ponytail: a curve in the spirit of Garmin's recovery time, not a validated
-// model: 21 strain is 72 h at 50 % recovery, a light session a few hours.
-double recoveryHours(double strain, {double? recovery}) {
-  final base = 72 * math.pow((strain / 21).clamp(0.0, 1.0), 2).toDouble();
-  final factor = recovery == null ? 1.0 : (1.5 - recovery / 100).clamp(.6, 1.4);
-  return base * factor;
-}
-
-Future<List<Widget>> loadRecoveryTime(
-    BuildContext c, LocalRepository repo, VoidCallback reload) async {
-  final t = await _Today.load(repo);
-  final now = DateTime.now();
-  final sessions = await repo.getSessions(
-      from: now.subtract(const Duration(days: 4)).millisecondsSinceEpoch ~/ 1000);
-  if (!c.mounted) return const [];
-  // Every recent session still owes time; the one that ends latest wins.
-  DateTime? ready;
-  Map<String, dynamic>? from;
-  for (final s in sessions) {
-    final strain = (s['strain'] as num?)?.toDouble();
-    final end = (s['end_ts'] as num?)?.toInt();
-    if (strain == null || end == null) continue;
-    final at = DateTime.fromMillisecondsSinceEpoch(end * 1000).add(Duration(
-        minutes: (recoveryHours(strain, recovery: t.recovery) * 60).round()));
-    if (ready == null || at.isAfter(ready)) (ready, from) = (at, s);
-  }
-  if (ready == null || from == null) {
-    return [xpNote(c, tr(c, 'Keine Einheit in den letzten 4 Tagen.', 'No session in the last 4 days.'))];
-  }
-  final left = ready.difference(now);
-  final total = recoveryHours((from['strain'] as num).toDouble(), recovery: t.recovery);
-  final h = left.inMinutes / 60;
-  return [
-    xpStat(
-        c,
-        tr(c, 'Erholt in', 'Recovered in'),
-        h <= 0 ? tr(c, 'Bereit', 'Ready') : '${h.ceil()} h',
-        sub: h <= 0 ? '' : '${tr(c, 'ab', 'from')} ${clock(ready)} · ${prettyDayShort(c, ready)}',
-        color: h <= 0 ? C.green : C.orange),
-    const SizedBox(height: S.x3),
-    xpBar(c, '${from['title'] ?? ''} · Strain ${(from['strain'] as num).toStringAsFixed(1)}',
-        total <= 0 ? 1 : 1 - (h / total).clamp(0.0, 1.0), '${total.round()} h',
-        color: h <= 0 ? C.green : C.orange),
-  ];
-}
-
-String prettyDayShort(BuildContext c, DateTime d) {
-  final now = DateTime.now();
-  final days = DateTime(d.year, d.month, d.day)
-      .difference(DateTime(now.year, now.month, now.day))
-      .inDays;
-  return switch (days) {
-    0 => tr(c, 'heute', 'today'),
-    1 => tr(c, 'morgen', 'tomorrow'),
-    _ => '${two(d.day)}.${two(d.month)}.',
-  };
-}
-
-// ═══ 15 · Laufzeit-Prognose ══════════════════════════════════════════════════
-
-/// Riegel: a time over [d1] metres predicts [d2] metres as t·(d2/d1)^1.06.
-double riegelSeconds(double t1, double d1, double d2) =>
-    t1 * math.pow(d2 / d1, 1.06).toDouble();
-
-/// The fastest prediction for [target] metres from runs of (metres, seconds).
-/// Runs under 2 km or slower than 12 min/km say little and are skipped.
-double? bestPrediction(List<(double, double)> runs, double target) {
-  double? best;
-  for (final (m, s) in runs) {
-    if (m < 2000 || s <= 0 || s / (m / 1000) > 720) continue;
-    final p = riegelSeconds(s, m, target);
-    if (best == null || p < best) best = p;
-  }
-  return best;
-}
-
-String raceTime(double sec) {
-  final t = sec.round();
-  final h = t ~/ 3600, m = (t % 3600) ~/ 60, s = t % 60;
-  return h > 0 ? '$h:${two(m)}:${two(s)}' : '$m:${two(s)}';
-}
-
-Future<List<Widget>> loadRacePrediction(
-    BuildContext c, LocalRepository repo, VoidCallback reload) async {
-  final since = DateTime.now().subtract(const Duration(days: 90));
-  final sinceSec = since.millisecondsSinceEpoch ~/ 1000;
-  final runs = <(double, double)>[];
-  for (final s in await repo.getSessions(from: sinceSec)) {
-    if (!'${s['type']}'.toLowerCase().contains('run')) continue;
-    final id = s['id'], start = s['start_ts'], end = s['end_ts'];
-    if (id is! String || start is! int || end is! int) continue;
-    try {
-      final pts = [for (final r in await LocalDb.routePoints(id)) RoutePoint.fromRow(r)];
-      final m = totalDistanceMeters(pts);
-      final sec = movingSeconds(pts);
-      if (m > 0) runs.add((m, (sec > 0 ? sec : end - start).toDouble()));
-    } catch (_) {}
-  }
-  try {
-    for (final r in await LocalDb.importedWorkouts()) {
-      if (!'${r['kind']}'.toLowerCase().contains('run')) continue;
-      final start = r['start_ts'], end = r['end_ts'], m = r['distance_m'];
-      if (start is! num || end is! num || m is! num || start < sinceSec) continue;
-      runs.add((m.toDouble(), (end - start).toDouble()));
-    }
-  } catch (_) {}
-  if (!c.mounted) return const [];
-  final targets = [
-    ('5 km', 5000.0),
-    ('10 km', 10000.0),
-    (tr(c, 'Halbmarathon', 'Half marathon'), 21097.5),
-  ];
-  final preds = [for (final t in targets) (t.$1, t.$2, bestPrediction(runs, t.$2))];
-  if (preds.every((p) => p.$3 == null)) {
-    return [xpNote(c, tr(c, 'Noch kein Lauf ab 2 km mit GPS in den letzten 90 Tagen.',
-        'No GPS run of 2 km or more in the last 90 days yet.'))];
-  }
-  return [
-    for (final (label, m, sec) in preds)
-      if (sec != null)
-        xpStat(c, label, raceTime(sec),
-            sub: '${raceTime(sec / (m / 1000))} /km', color: C.green),
-  ];
-}
-
-// ═══ 16 · Intervallfasten ════════════════════════════════════════════════════
-
-/// The running fast: since when and for how many hours. Null while not fasting.
-(DateTime, int)? fastNow() {
-  final f = xpGet('fast');
-  final start = f['start'], goal = f['goal_h'];
-  if (start is! int) return null;
-  return (DateTime.fromMillisecondsSinceEpoch(start), goal is int ? goal : 16);
-}
-
-int fastGoal() => (xpGet('fast')['goal_h'] as int?) ?? 16;
-
-/// Edge+: the fasting timer, one card: a ring towards the goal, start/stop.
-class FastingTile extends StatefulWidget {
-  const FastingTile({super.key});
-
-  @override
-  State<FastingTile> createState() => _FastingTileState();
-}
-
-class _FastingTileState extends State<FastingTile> {
-  Timer? _tick;
-
-  @override
-  void initState() {
-    super.initState();
-    _tick = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _tick?.cancel();
-    super.dispose();
-  }
-
-  void _toggle() {
-    final f = fastNow();
-    setState(() => xpSet('fast', {
-          'goal_h': fastGoal(),
-          if (f == null) 'start': DateTime.now().millisecondsSinceEpoch,
-        }));
-  }
-
-  void _goal() {
-    const goals = [12, 14, 16, 18, 20];
-    final next = goals[(goals.indexOf(fastGoal()) + 1) % goals.length];
-    setState(() => xpSet('fast', {...xpGet('fast'), 'goal_h': next}));
-  }
-
-  @override
-  Widget build(BuildContext c) {
-    final p = P.of(c);
-    final f = fastNow();
-    final goal = f?.$2 ?? fastGoal();
-    final mins = f == null ? 0 : DateTime.now().difference(f.$1).inMinutes;
-    final frac = (mins / (goal * 60)).clamp(0.0, 1.0);
-    final done = frac >= 1;
-    return Surface(
-      child: Row(children: [
-        SizedBox(
-          width: 52,
-          height: 52,
-          child: Stack(alignment: Alignment.center, children: [
-            CustomPaint(
-              size: Size.infinite,
-              painter: Ring(frac, done ? C.green : C.orange, p.track,
-                  stroke: 5, solid: true),
-            ),
-            Icon(LucideIcons.timer, size: 18, color: p.ink3),
-          ]),
-        ),
-        const SizedBox(width: S.x3),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(tr(c, 'Fasten', 'Fasting'), style: F.head.copyWith(color: p.ink)),
-            Pressable(
-              onTap: _goal,
-              semanticLabel: tr(c, 'Ziel ändern', 'Change goal'),
-              child: Text(
-                  f == null
-                      ? '$goal:${24 - goal}'
-                      : '${hmText(mins)} / $goal h',
-                  style: F.cap.copyWith(color: done ? p.on(C.green) : p.ink2)),
-            ),
-          ]),
-        ),
-        TextButton(
-          onPressed: _toggle,
-          child: Text(f == null ? tr(c, 'Start', 'Start') : tr(c, 'Stopp', 'Stop')),
-        ),
-      ]),
-    );
-  }
-}
-
 // ── the list ─────────────────────────────────────────────────────────────────
 
 class XpFeature {
@@ -1413,8 +1185,6 @@ final xpFeatures = <XpFeature>[
   XpFeature(LucideIcons.flame, C.orange, (c) => tr(c, 'Serien', 'Streaks'), loadStreaks),
   XpFeature(LucideIcons.fileText, C.blue, (c) => tr(c, 'Gesundheitsbericht', 'Health report'), loadReport),
   XpFeature(LucideIcons.flower2, C.pink, (c) => tr(c, 'Zyklus', 'Cycle'), loadCycleAnalysis),
-  XpFeature(LucideIcons.hourglass, C.orange, (c) => tr(c, 'Erholungszeit', 'Recovery time'), loadRecoveryTime),
-  XpFeature(LucideIcons.timer, C.green, (c) => tr(c, 'Laufzeit-Prognose', 'Race prediction'), loadRacePrediction),
 ];
 
 /// The "Experimentell" block for the bottom of Home.
@@ -1442,8 +1212,6 @@ class _ExperimentalSectionState extends State<ExperimentalSection> {
       tr(c, 'Experimentell', 'Experimental'),
       Column(children: [
         const WorkModeTile(),
-        const SizedBox(height: S.x3),
-        const FastingTile(),
         const SizedBox(height: S.x3),
         Surface(
           pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),

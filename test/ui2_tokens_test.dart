@@ -201,7 +201,10 @@ const _notComponents = {
   // Home and Sleep carry it on every golden that matters.
   'TabHeader', 'BandStatusIcon',
   // Edge+ experiments: each reads the database or AppState on build.
-  'XpScreen', 'SleepPlannerCard', 'WorkModeTile', 'ExperimentalSection', 'GoalRings', 'MorningWeather', 'FastingTile',
+  'XpScreen', 'SleepPlannerCard', 'WorkModeTile', 'ExperimentalSection', 'GoalRings',
+  // Edge+: recovery / race card reads sessions; the fasting card owns a
+  // ticking clock and Prefs.
+  'RunInsightsCard', 'FastingCard',
   // Edge+ activity progress: reads strength_set and Prefs; the editor is a route.
   'ProgressSection', 'GoalEditor',
   // shell and routing
