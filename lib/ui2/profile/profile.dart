@@ -18,6 +18,7 @@ import '../../state/app_state.dart';
 import '../../state/locale_controller.dart';
 import '../ui2.dart';
 import '../screens/coach.dart' show CoachSetup, coachSubtitle;
+import '../screens/claude_key_sheet.dart';
 import '../guides/guide_catalogue.dart' show bandGenerationOf;
 import '../guides/help_screen.dart' show HelpScreen;
 import '../screens/home_screen.dart' show deviceBatteryOf;
@@ -401,6 +402,12 @@ class ProfileHomeView extends StatelessWidget {
                           (AppLocalizations.of(c)?.profileNotSetUp ??
                               'Not set up'),
                       onTap: onCoach)),
+                  // Edge+: own key for the meal photo estimate.
+                  Builder(builder: (c) => SetRow(
+                      LucideIcons.camera, C.purple,
+                      trDe(c, 'Claude für Essensfotos', 'Claude for meal photos'),
+                      sub: trDe(c, 'Eigener API-Key', 'Your own API key'),
+                      onTap: () => editClaudeKey(c))),
                   SetRow(LucideIcons.circleHelp, C.blue,
                       l?.profileHelpRow ?? 'Help',
                       onTap: onHelp),

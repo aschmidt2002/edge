@@ -8,11 +8,11 @@ import '../../l10n/display_text.dart';
 // underneath, opened deliberately, and never the path a new user is walked
 // down.
 //
-// There is no photo estimate. The sheet does not say so either — a card
-// explaining a feature that does not exist is an advert for it. See
-// docs/internal/UI_ROADMAP.md. The store's guard for a future photo path
-// (`FoodEntry.sanitised`, which never lets a photo carry a total) stays where
-// it is, because it is a data rule rather than a screen.
+// Edge+: there IS a photo estimate. A meal photo goes to Claude with the
+// user's own API key (lib/ai/food_photo.dart) and its estimate PRE-FILLS the
+// number boxes; Claude may ask up to two short questions, answered here, to
+// refine it. Nothing is written until the user presses Save, which is the
+// confirmation `FoodEntry.sanitised` asks of a photo entry.
 //
 // There IS a barcode scan, and it lives inside "Add the numbers" rather than
 // beside the occasion button. A scan is macro detail, and macro detail is the
@@ -26,8 +26,11 @@ import '../../l10n/display_text.dart';
 // see `FoodSource.barcode`.
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../ai/food_photo.dart';
 
 import '../../data/db.dart';
 import '../../data/day_label.dart';
@@ -39,6 +42,7 @@ import '../profile/profile.dart' show SetRow;
 import '../ui2.dart';
 import 'journal_compose.dart' show OsTextField;
 import 'log_workout.dart' show dayLabel;
+import 'claude_key_sheet.dart';
 import 'scan_barcode.dart';
 
 class LogFoodSheet extends StatefulWidget {
@@ -118,6 +122,13 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   OffOutcome? _outcome;
   bool _looking = false;
 
+  // ── Edge+: photo estimate ──
+  List<int>? _photo;
+  FoodPhotoEstimate? _estimate;
+  bool _estimating = false;
+  String? _photoError;
+  List<TextEditingController> _answers = const [];
+
   @override
   void initState() {
     super.initState();
@@ -164,6 +175,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
       _fat,
       _fibre,
       _portion,
+      ..._answers,
     ]) {
       t.dispose();
     }
@@ -284,6 +296,183 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   /// "850 kcal" used to arrive here as the same null as an empty field and the
   /// meal was written with the energy silently dropped.
   double? _num(TextEditingController t) => Typed.of(t.text).value;
+
+  // ── Edge+: the photo path ──────────────────────────────────────────────────
+
+  String _lang(BuildContext c) =>
+      Localizations.localeOf(c).languageCode == 'de' ? 'de' : 'en';
+
+  /// Take (or pick) a photo and ask Claude for an estimate. Asks for the API
+  /// key first when none is stored.
+  Future<void> _takePhoto() async {
+    var key = await ClaudeKey.read();
+    if (key == null) {
+      if (!mounted) return;
+      await editClaudeKey(context);
+      key = await ClaudeKey.read();
+      if (key == null || !mounted) return;
+    }
+    if (!mounted) return;
+    final source = await _askPhotoSource(context);
+    if (source == null || !mounted) return;
+    final XFile? shot;
+    try {
+      shot = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 80,
+      );
+    } catch (e) {
+      debugPrint('food photo: picker failed: $e');
+      if (mounted) {
+        setState(() => _photoError = trDe(context,
+            'Kamera oder Galerie konnte nicht geöffnet werden.',
+            'Could not open the camera or gallery.'));
+      }
+      return;
+    }
+    if (shot == null || !mounted) return;
+    _photo = await shot.readAsBytes();
+    await _estimatePhoto(key);
+  }
+
+  /// Ask again from the same photo, with the answers typed so far.
+  Future<void> _reestimate() async {
+    final key = await ClaudeKey.read();
+    if (key == null || !mounted) return;
+    await _estimatePhoto(key, withAnswers: true);
+  }
+
+  Future<void> _estimatePhoto(String key, {bool withAnswers = false}) async {
+    final photo = _photo;
+    if (photo == null) return;
+    final qs = _estimate?.questions ?? const <String>[];
+    final answers = withAnswers
+        ? [
+            for (var i = 0; i < qs.length && i < _answers.length; i++)
+              if (_answers[i].text.trim().isNotEmpty)
+                FoodQa(qs[i], _answers[i].text.trim()),
+          ]
+        : const <FoodQa>[];
+    setState(() {
+      _estimating = true;
+      _photoError = null;
+      _detail = true;
+    });
+    try {
+      final est = await estimateFoodPhoto(
+        apiKey: key,
+        jpeg: photo,
+        lang: _lang(context),
+        answers: answers,
+        hint: withAnswers ? _label.text : '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _estimating = false;
+        if (est.label.isEmpty) {
+          _photoError = trDe(context, 'Auf dem Foto ist kein Essen zu erkennen.',
+              'No food could be recognised in the photo.');
+          return;
+        }
+        _estimate = est;
+        // A photo replaces a scan: the numbers are no longer the pack's.
+        _scanned = null;
+        _outcome = null;
+        _label.text = est.label;
+        _kcal.text = _plain(est.kcal);
+        _protein.text = _plain(est.proteinG);
+        _carbs.text = _plain(est.carbsG);
+        _fat.text = _plain(est.fatG);
+        _fibre.text = _plain(est.fibreG);
+        for (final a in _answers) {
+          a.dispose();
+        }
+        _answers = [
+          for (final _ in withAnswers ? const <String>[] : est.questions)
+            TextEditingController(),
+        ];
+      });
+    } on FoodPhotoException catch (e) {
+      if (mounted) {
+        setState(() {
+          _estimating = false;
+          _photoError = e.message;
+        });
+      }
+    } catch (e) {
+      debugPrint('food photo: $e');
+      if (mounted) {
+        setState(() {
+          _estimating = false;
+          _photoError = '$e';
+        });
+      }
+    }
+  }
+
+  /// The questions Claude asked, with a box each, and what it assumed.
+  List<Widget> _photoBlock(BuildContext c) {
+    final p = P.of(c);
+    final est = _estimate;
+    final out = <Widget>[];
+    if (_estimating) {
+      out.addAll([
+        const SizedBox(height: S.x3),
+        StatusCard(
+          trDe(c, 'Claude schaut sich das Foto an', 'Claude is looking at the photo'),
+          trDe(c, 'Das dauert meist 10 bis 30 Sekunden.',
+              'This usually takes 10 to 30 seconds.'),
+          icon: LucideIcons.camera,
+          leading: const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      ]);
+      return out;
+    }
+    if (_photoError != null) {
+      out.addAll([
+        const SizedBox(height: S.x3),
+        StatusCard(trDe(c, 'Keine Schätzung', 'No estimate'), _photoError!,
+            icon: LucideIcons.triangleAlert),
+      ]);
+    }
+    if (est == null) return out;
+    final conf = switch (est.confidence) {
+      'high' => trDe(c, 'ziemlich sicher', 'fairly sure'),
+      'medium' => trDe(c, 'mittel sicher', 'somewhat sure'),
+      _ => trDe(c, 'grobe Schätzung', 'rough guess'),
+    };
+    final portion = est.portionG == null ? '' : ' · ~${_plain(est.portionG)} g';
+    out.addAll([
+      const SizedBox(height: S.x3),
+      Text(
+        '${trDe(c, 'Claude-Schätzung', 'Claude estimate')} ($conf)$portion'
+        '${est.note.isEmpty ? '' : '. ${est.note}'}',
+        style: F.cap.copyWith(color: p.ink3, height: 1.45),
+      ),
+    ]);
+    if (_answers.isNotEmpty) {
+      out.add(const SizedBox(height: S.x3));
+      for (var i = 0; i < _answers.length && i < est.questions.length; i++) {
+        out.addAll([
+          OsTextField(controller: _answers[i], label: est.questions[i]),
+          const SizedBox(height: S.x3),
+        ]);
+      }
+      out.add(BigButton(
+        trDe(c, 'Mit Antworten neu schätzen', 'Re-estimate with answers'),
+        icon: LucideIcons.refreshCw,
+        color: C.domFood,
+        soft: true,
+        onTap: _reestimate,
+      ));
+    }
+    return out;
+  }
 
   // ── the barcode path ──────────────────────────────────────────────────────
 
@@ -538,6 +727,20 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
               color: C.domFood,
               onTap: () => _write(_base(label: _mealLabel(c, _meal))),
             ),
+            const SizedBox(height: S.x3),
+            Surface(
+              pad: const EdgeInsets.symmetric(horizontal: S.x4),
+              child: SetRow(
+                LucideIcons.camera,
+                C.domFood,
+                trDe(c, 'Foto vom Essen', 'Photo of the meal'),
+                sub: trDe(c, 'Claude schätzt die Nährwerte',
+                    'Claude estimates the nutrition'),
+                chevron: false,
+                onTap: _estimating ? null : _takePhoto,
+              ),
+            ),
+            ..._photoBlock(c),
             if (_hasHistory)
               Section(
                 l?.logFoodAgain ?? 'Again',
@@ -736,7 +939,9 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
                       // read — and so the row can say where its numbers came
                       // from. NOT `verified`: see FoodSource.barcode.
                       foodKey: scan?.barcode ?? o?.foodKey,
-                      quantity: scan == null ? o?.quantity : _num(_portion),
+                      quantity: scan != null
+                          ? _num(_portion)
+                          : (_estimate?.portionG ?? o?.quantity),
                       unit: scan == null ? (o?.unit ?? 'g') : 'g',
                       sugarG: o?.sugarG,
                       satFatG: o?.satFatG,
@@ -744,9 +949,13 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
                       ironMg: o?.ironMg,
                       calciumMg: o?.calciumMg,
                       note: o?.note ?? '',
-                      source: scan == null
-                          ? FoodSource.manual
-                          : FoodSource.barcode,
+                      source: scan != null
+                          ? FoodSource.barcode
+                          : _estimate != null
+                              ? FoodSource.photo
+                              : (o?.source == FoodSource.photo
+                                  ? FoodSource.photo
+                                  : FoodSource.manual),
                       kcal: _num(_kcal),
                       proteinG: _num(_protein),
                       carbsG: _num(_carbs),
@@ -941,9 +1150,12 @@ class FoodRow extends StatelessWidget {
     final l = AppLocalizations.of(c);
     final stacked = bigText(c);
     final badge = Pill(
-              entry.source == FoodSource.barcode
-                  ? (l?.logFoodPillOpenFoodFacts ?? 'Open Food Facts')
-                  : (l?.logFoodPillYours ?? 'Yours'),
+              switch (entry.source) {
+                FoodSource.barcode =>
+                  l?.logFoodPillOpenFoodFacts ?? 'Open Food Facts',
+                FoodSource.photo => trDe(c, 'Foto', 'Photo'),
+                _ => l?.logFoodPillYours ?? 'Yours',
+              },
       C.n400,
       wrap: stacked,
     );
@@ -990,8 +1202,6 @@ class FoodRow extends StatelessWidget {
   }
 
   static String _detail(BuildContext c, FoodEntry e) {
-    // No photo pipeline exists, so `FoodSource.photo` is never written and the
-    // branch that read it could never run.
     if (e.isBareOccasion) {
       return AppLocalizations.of(c)?.logFoodBareOccasion ??
           'LOGGED · ENERGY NOT RECORDED';
@@ -1039,3 +1249,35 @@ class _NumberRow extends StatelessWidget {
     ],
   );
 }
+
+/// Edge+: camera or gallery for the meal photo.
+Future<ImageSource?> _askPhotoSource(BuildContext c) =>
+    showModalBottomSheet<ImageSource>(
+      context: c,
+      sheetAnimationStyle: sheetMotion(c),
+      backgroundColor: P.of(c).card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.xxl)),
+      ),
+      builder: (s) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(S.x5, S.x5, S.x5, S.x6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              BigButton(trDe(s, 'Foto aufnehmen', 'Take a photo'),
+                  icon: LucideIcons.camera,
+                  color: C.domFood,
+                  onTap: () => Navigator.of(s).pop(ImageSource.camera)),
+              const SizedBox(height: S.x3),
+              BigButton(trDe(s, 'Aus der Galerie', 'From the gallery'),
+                  icon: LucideIcons.image,
+                  color: C.domFood,
+                  soft: true,
+                  onTap: () => Navigator.of(s).pop(ImageSource.gallery)),
+            ],
+          ),
+        ),
+      ),
+    );
