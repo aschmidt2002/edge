@@ -82,111 +82,125 @@ class RecoveryRing extends StatelessWidget {
     final band = readinessBand(v, l);
     final sleep = d.sleepMin.value, rhr = d.rhr.value, strain = d.strain.value;
     final s = stress;
-    return Surface(
-      elevation: 2,
-      semanticLabel: 'Recovery',
+    final ring = Pressable(
+      onTap: () => go(c, const ReadinessDetail()),
+      semanticLabel: 'Recovery ${v?.round() ?? ''} ${band.label}',
       child: SizedBox(
-        height: 260,
+        width: 150,
+        height: 150,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // The faint orbit the bubbles sit on.
-            Container(
-              width: 230,
-              height: 230,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: p.track, width: 1),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: Ring(
+                  ((v ?? 0) / 100).clamp(0.0, 1.0),
+                  p.on(band.color),
+                  p.track,
+                  stroke: 10,
+                  t: animate(c, 1),
+                  solid: v != null,
+                  background: p.card,
+                ),
               ),
             ),
-            Pressable(
-              onTap: () => go(c, const ReadinessDetail()),
-              semanticLabel: 'Recovery ${v?.round() ?? ''} ${band.label}',
-              child: SizedBox(
-                width: 150,
-                height: 150,
-                child: Stack(
-                  alignment: Alignment.center,
+            // The words shrink to the ring rather than spill out of it.
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: Ring(
-                          ((v ?? 0) / 100).clamp(0.0, 1.0),
-                          p.on(band.color),
-                          p.track,
-                          stroke: 10,
-                          t: animate(c, 1),
-                          solid: v != null,
-                          background: p.card,
-                        ),
-                      ),
+                    Text('RECOVERY', style: F.over.copyWith(color: p.ink3)),
+                    Text(
+                      v == null ? '–' : '${v.round()}%',
+                      style: F.n34.copyWith(color: p.ink),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('RECOVERY', style: F.over.copyWith(color: p.ink3)),
-                        Text(
-                          v == null ? '–' : '${v.round()}%',
-                          style: F.n34.copyWith(color: p.ink),
-                        ),
-                        Text(
-                          band.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: F.cap.copyWith(
-                            color: p.on(band.color),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      band.label,
+                      maxLines: 1,
+                      style: F.cap.copyWith(
+                        color: p.on(band.color),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            Align(
-              alignment: Alignment.topLeft,
-              child: _Bubble(
-                LucideIcons.activity,
-                s == null ? C.n400 : stressColor(s),
-                'Stress',
-                s == null ? '–' : displayFixed(s, 1),
-                () => go(c, XpScreen('Stress', loadStressNow)),
-              ),
-            ),
-            Align(
-              alignment: Alignment.topRight,
-              child: _Bubble(
-                LucideIcons.moon,
-                C.blue,
-                tr(c, 'Schlaf', 'Sleep'),
-                sleep == null ? '–' : hmText(sleep),
-                () => go(c, const SleepDetail()),
-              ),
-            ),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: _Bubble(
-                LucideIcons.heart,
-                C.red,
-                tr(c, 'Herz', 'Heart'),
-                rhr == null ? '–' : '${rhr.round()}',
-                () => go(c, const MetricDetail('resting_hr')),
-              ),
-            ),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: _Bubble(
-                LucideIcons.zap,
-                C.purple,
-                'Strain',
-                strain == null ? '–' : displayFixed(strain, 1),
-                () => go(c, const DayStrainDetail()),
-              ),
-            ),
           ],
         ),
       ),
+    );
+    final bubbles = [
+      _Bubble(
+        LucideIcons.activity,
+        s == null ? C.n400 : stressColor(s),
+        'Stress',
+        s == null ? '–' : displayFixed(s, 1),
+        () => go(c, XpScreen('Stress', loadStressNow)),
+      ),
+      _Bubble(
+        LucideIcons.moon,
+        C.blue,
+        tr(c, 'Schlaf', 'Sleep'),
+        sleep == null ? '–' : hmText(sleep),
+        () => go(c, const SleepDetail()),
+      ),
+      _Bubble(
+        LucideIcons.heart,
+        C.red,
+        tr(c, 'Herz', 'Heart'),
+        rhr == null ? '–' : '${rhr.round()}',
+        () => go(c, const MetricDetail('resting_hr')),
+      ),
+      _Bubble(
+        LucideIcons.zap,
+        C.purple,
+        'Strain',
+        strain == null ? '–' : displayFixed(strain, 1),
+        () => go(c, const DayStrainDetail()),
+      ),
+    ];
+    return Surface(
+      elevation: 2,
+      semanticLabel: 'Recovery',
+      // Large text: the bubbles cannot fit around the ring, so they stack
+      // under it, the same switch Home's ring trio makes.
+      child: bigText(c)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: ring),
+                for (final b in bubbles) ...[const SizedBox(height: S.x2), b],
+              ],
+            )
+          : SizedBox(
+              height: 260,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // The faint orbit the bubbles sit on.
+                  Container(
+                    width: 230,
+                    height: 230,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: p.track, width: 1),
+                    ),
+                  ),
+                  ring,
+                  for (final (i, a) in const [
+                    Alignment.topLeft,
+                    Alignment.topRight,
+                    Alignment.bottomLeft,
+                    Alignment.bottomRight,
+                  ].indexed)
+                    Align(alignment: a, child: bubbles[i]),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -201,42 +215,54 @@ class _Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext c) {
     final p = P.of(c);
+    final big = bigText(c);
+    final dot = Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: p.on(color).withValues(alpha: .14),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 15, color: p.on(color)),
+    );
+    final name = F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600);
+    final number = F.cap.copyWith(color: p.ink2);
     return Pressable(
       onTap: onTap,
       semanticLabel: '$label $value',
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 150),
+        constraints: BoxConstraints(maxWidth: big ? double.infinity : 150),
         padding: const EdgeInsets.fromLTRB(4, 4, S.x3, 4),
-        decoration: BoxDecoration(
-          color: p.card2,
-          borderRadius: BorderRadius.circular(999),
-        ),
+        decoration: BoxDecoration(color: p.card2, borderRadius: R.rPill),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: p.on(color).withValues(alpha: .14),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 15, color: p.on(color)),
-            ),
+            dot,
             const SizedBox(width: S.x2),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: F.cap.copyWith(
-                  color: p.ink,
-                  fontWeight: FontWeight.w600,
+            if (big)
+              // Large text wraps instead of cutting the number off.
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$label ', style: name),
+                      TextSpan(text: value, style: number),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: name,
                 ),
               ),
-            ),
-            const SizedBox(width: S.x1),
-            Text(value, style: F.cap.copyWith(color: p.ink2)),
+              const SizedBox(width: S.x1),
+              Text(value, style: number),
+            ],
           ],
         ),
       ),

@@ -211,6 +211,9 @@ const _notComponents = {
   'DentalScreen', 'OralBConnectScreen',
   // Edge+ screen time: a Scaffold route that reads Prefs and the journal.
   'ScreenTimeScreen',
+  // Edge+ recovery card and health report button: the card reads the day on
+  // build, the button opens a sheet that reads it; the ring itself is in.
+  'RecoveryCard', 'HealthReportButton',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
