@@ -73,7 +73,8 @@ void main() {
     await _loadType();
   });
 
-  testWidgets('the shell has four destinations and cannot grow a fifth',
+  // Edge+: Nutrition is its own tab; Health opens from Home and has no button.
+  testWidgets('the shell has five destinations and cannot grow a sixth',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: buildTheme(Brightness.light),
@@ -81,8 +82,9 @@ void main() {
         builder: (c, d) => Center(child: Text(d.label)),
       ),
     ));
-    expect(ShellDomain.values, hasLength(4));
+    expect(ShellDomain.values, hasLength(5));
     for (final d in ShellDomain.values) {
+      if (d == ShellDomain.health) continue;
       expect(find.text(d.label), findsWidgets, reason: '${d.label} tab missing');
     }
   });

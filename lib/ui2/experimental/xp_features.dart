@@ -120,7 +120,7 @@ Widget xpBar(BuildContext c, String label, double frac, String value,
       ]),
       const SizedBox(height: S.x1),
       ClipRRect(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: R.rPill,
         child: LinearProgressIndicator(
           value: frac.clamp(0.0, 1.0),
           minHeight: 8,
@@ -148,7 +148,7 @@ Widget xpStrip(BuildContext c, List<double> values, double max,
                 margin: const EdgeInsets.symmetric(horizontal: .5),
                 height: 6 + 84 * (v / max).clamp(0.0, 1.0),
                 decoration: BoxDecoration(
-                    color: colorOf(v), borderRadius: BorderRadius.circular(2)),
+                    color: colorOf(v), borderRadius: R.rPill),
               ),
             ),
         ]),

@@ -19,10 +19,6 @@ import 'home_screen.dart' show unitsOf;
 import 'journal_compose.dart' show OsTextField;
 import 'workout_screen.dart' show activityHost, loadSetHistory;
 
-/// German or English, by the app's language. Fork-only strings have no ARB.
-String _t(BuildContext c, String de, String en) =>
-    Localizations.localeOf(c).languageCode == 'de' ? de : en;
-
 String _exLabel(BuildContext c, String key) =>
     exerciseByKey(key)?.labelFor(Localizations.localeOf(c).languageCode) ??
     key.replaceAll('_', ' ');
@@ -67,7 +63,7 @@ Future<void> startTrainingPlan(
   final app = c.read<AppState>();
   final nav = Navigator.of(c);
   final messenger = ScaffoldMessenger.maybeOf(c);
-  final busy = _t(
+  final busy = tr(
     c,
     'Es läuft schon eine Einheit. Beende sie zuerst.',
     'A session is already running. Finish it first.',
@@ -151,9 +147,9 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: S.x4),
               child: NavBar(
-                _t(c, 'Trainingspläne', 'Training plans'),
+                tr(c, 'Trainingspläne', 'Training plans'),
                 trailing: Pressable(
-                  semanticLabel: _t(c, 'Neuer Plan', 'New plan'),
+                  semanticLabel: tr(c, 'Neuer Plan', 'New plan'),
                   onTap: () => _edit(),
                   child: Icon(LucideIcons.plus, size: 22, color: p.ink),
                 ),
@@ -165,8 +161,8 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                 children: [
                   if (plans.isEmpty) ...[
                     StatusCard(
-                      _t(c, 'Noch kein Plan', 'No plan yet'),
-                      _t(
+                      tr(c, 'Noch kein Plan', 'No plan yet'),
+                      tr(
                         c,
                         'Lege einen Plan mit deinen Übungen an. Beim Start '
                             'gehst du sie der Reihe nach durch und trägst nur '
@@ -179,7 +175,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                     ),
                     const SizedBox(height: S.x4),
                     BigButton(
-                      _t(
+                      tr(
                         c,
                         'Push / Pull / Legs anlegen',
                         'Add Push / Pull / Legs',
@@ -211,7 +207,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                     const SizedBox(height: S.x3),
                   ],
                   BigButton(
-                    _t(c, 'Neuer Plan', 'New plan'),
+                    tr(c, 'Neuer Plan', 'New plan'),
                     icon: LucideIcons.plus,
                     color: C.purple,
                     soft: plans.isNotEmpty,
@@ -259,7 +255,7 @@ class _PlanCard extends StatelessWidget {
                 child: Text(plan.name, style: F.head.copyWith(color: p.ink)),
               ),
               Pressable(
-                semanticLabel: _t(c, 'Plan bearbeiten', 'Edit plan'),
+                semanticLabel: tr(c, 'Plan bearbeiten', 'Edit plan'),
                 onTap: onEdit,
                 child: Icon(LucideIcons.pencil, size: 18, color: p.ink3),
               ),
@@ -290,7 +286,7 @@ class _PlanCard extends StatelessWidget {
           if (pct != null) ...[const SizedBox(height: S.x2), _TrendLabel(pct)],
           const SizedBox(height: S.x3),
           BigButton(
-            _t(c, 'Plan starten', 'Start plan'),
+            tr(c, 'Plan starten', 'Start plan'),
             icon: LucideIcons.play,
             color: C.purple,
             onTap: onStart,
@@ -313,17 +309,17 @@ class _TrendLabel extends StatelessWidget {
       Tendency.up => (
         LucideIcons.trendingUp,
         C.green,
-        _t(c, 'Steigend', 'Rising'),
+        tr(c, 'Steigend', 'Rising'),
       ),
       Tendency.down => (
         LucideIcons.trendingDown,
         C.red,
-        _t(c, 'Fallend', 'Falling'),
+        tr(c, 'Fallend', 'Falling'),
       ),
       Tendency.flat => (
         LucideIcons.moveRight,
         C.blue,
-        _t(c, 'Stabil', 'Steady'),
+        tr(c, 'Stabil', 'Steady'),
       ),
     };
     return Row(
@@ -332,7 +328,7 @@ class _TrendLabel extends StatelessWidget {
         const SizedBox(width: S.x1),
         Flexible(
           child: Text(
-            '$word ${_num(c, pct, sign: true)} % ${_t(c, 'pro Einheit', 'per session')}',
+            '$word ${_num(c, pct, sign: true)} % ${tr(c, 'pro Einheit', 'per session')}',
             style: F.cap.copyWith(
               color: p.on(color),
               fontWeight: FontWeight.w600,
@@ -409,12 +405,12 @@ class _TrainingPlanEditorState extends State<TrainingPlanEditor> {
               padding: const EdgeInsets.symmetric(horizontal: S.x4),
               child: NavBar(
                 widget.plan == null
-                    ? _t(c, 'Neuer Plan', 'New plan')
-                    : _t(c, 'Plan bearbeiten', 'Edit plan'),
+                    ? tr(c, 'Neuer Plan', 'New plan')
+                    : tr(c, 'Plan bearbeiten', 'Edit plan'),
                 trailing: widget.plan == null
                     ? null
                     : Pressable(
-                        semanticLabel: _t(c, 'Plan löschen', 'Delete plan'),
+                        semanticLabel: tr(c, 'Plan löschen', 'Delete plan'),
                         onTap: _delete,
                         child: Icon(
                           LucideIcons.trash2,
@@ -430,12 +426,12 @@ class _TrainingPlanEditorState extends State<TrainingPlanEditor> {
                 children: [
                   OsTextField(
                     controller: name,
-                    label: _t(c, 'Name', 'Name'),
-                    hint: _t(c, 'z. B. Push', 'e.g. Push'),
+                    label: tr(c, 'Name', 'Name'),
+                    hint: tr(c, 'z. B. Push', 'e.g. Push'),
                   ),
                   const SizedBox(height: S.x5),
                   Text(
-                    _t(c, 'ÜBUNGEN', 'EXERCISES'),
+                    tr(c, 'ÜBUNGEN', 'EXERCISES'),
                     style: F.over.copyWith(color: p.ink3),
                   ),
                   const SizedBox(height: S.x2),
@@ -461,7 +457,7 @@ class _TrainingPlanEditorState extends State<TrainingPlanEditor> {
                                   ),
                                 ),
                                 Pressable(
-                                  semanticLabel: _t(c, 'Nach oben', 'Move up'),
+                                  semanticLabel: tr(c, 'Nach oben', 'Move up'),
                                   onTap: i == 0 ? null : () => _move(i, -1),
                                   child: Icon(
                                     LucideIcons.chevronUp,
@@ -470,7 +466,7 @@ class _TrainingPlanEditorState extends State<TrainingPlanEditor> {
                                   ),
                                 ),
                                 Pressable(
-                                  semanticLabel: _t(
+                                  semanticLabel: tr(
                                     c,
                                     'Nach unten',
                                     'Move down',
@@ -487,7 +483,7 @@ class _TrainingPlanEditorState extends State<TrainingPlanEditor> {
                                   ),
                                 ),
                                 Pressable(
-                                  semanticLabel: _t(c, 'Entfernen', 'Remove'),
+                                  semanticLabel: tr(c, 'Entfernen', 'Remove'),
                                   onTap: () =>
                                       setState(() => exercises.removeAt(i)),
                                   child: Icon(
@@ -506,7 +502,7 @@ class _TrainingPlanEditorState extends State<TrainingPlanEditor> {
                     ),
                   const SizedBox(height: S.x3),
                   BigButton(
-                    _t(c, 'Übung hinzufügen', 'Add exercise'),
+                    tr(c, 'Übung hinzufügen', 'Add exercise'),
                     icon: LucideIcons.plus,
                     color: C.purple,
                     soft: true,
@@ -516,7 +512,7 @@ class _TrainingPlanEditorState extends State<TrainingPlanEditor> {
                   ListenableBuilder(
                     listenable: name,
                     builder: (_, _) => BigButton(
-                      _t(c, 'Speichern', 'Save'),
+                      tr(c, 'Speichern', 'Save'),
                       icon: LucideIcons.check,
                       color: C.purple,
                       onTap: _valid ? _save : null,
@@ -558,7 +554,7 @@ class TrainingPlanProgress extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: S.x4),
-              child: NavBar(plan.name, sub: _t(c, 'Fortschritt', 'Progress')),
+              child: NavBar(plan.name, sub: tr(c, 'Fortschritt', 'Progress')),
             ),
             Expanded(
               child: ListView(
@@ -569,12 +565,12 @@ class TrainingPlanProgress extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _t(c, 'GESAMTER PLAN', 'WHOLE PLAN'),
+                          tr(c, 'GESAMTER PLAN', 'WHOLE PLAN'),
                           style: F.over.copyWith(color: p.ink3),
                         ),
                         const SizedBox(height: S.x1),
                         Text(
-                          _t(
+                          tr(
                             c,
                             'Kraft im Schnitt aller Übungen, 100 = erste Einheit',
                             'Strength averaged over all exercises, 100 = first session',
@@ -592,7 +588,7 @@ class TrainingPlanProgress extends StatelessWidget {
                   ),
                   const SizedBox(height: S.x5),
                   Text(
-                    _t(c, 'ÜBUNGEN', 'EXERCISES'),
+                    tr(c, 'ÜBUNGEN', 'EXERCISES'),
                     style: F.over.copyWith(color: p.ink3),
                   ),
                   const SizedBox(height: S.x2),
@@ -620,7 +616,7 @@ class _Spark extends StatelessWidget {
     final p = P.of(c);
     if (values.length < 2) {
       return Text(
-        _t(
+        tr(
           c,
           'Der Verlauf erscheint ab der zweiten Einheit.',
           'The trend appears after the second session.',
@@ -644,7 +640,7 @@ class _ExerciseCard extends StatelessWidget {
   const _ExerciseCard(this.exKey, this.sessions);
 
   String _set(BuildContext c, ExerciseSession s) => s.topKg == null
-      ? '${s.topReps} ${_t(c, 'Wdh.', 'reps')} · ${_t(c, 'Körpergewicht', 'bodyweight')}'
+      ? '${s.topReps} ${tr(c, 'Wdh.', 'reps')} · ${tr(c, 'Körpergewicht', 'bodyweight')}'
       : '${_kg(c, s.topKg!)} × ${s.topReps}';
 
   @override
@@ -661,13 +657,13 @@ class _ExerciseCard extends StatelessWidget {
           const SizedBox(height: S.x1),
           if (last == null)
             Text(
-              _t(c, 'Noch nicht trainiert.', 'Not trained yet.'),
+              tr(c, 'Noch nicht trainiert.', 'Not trained yet.'),
               style: F.cap.copyWith(color: p.ink3),
             )
           else ...[
             Text(
-              '${_t(c, 'Zuletzt', 'Last')}: ${_set(c, last)} · '
-              '${last.sets} ${_t(c, 'Sätze', 'sets')}',
+              '${tr(c, 'Zuletzt', 'Last')}: ${_set(c, last)} · '
+              '${last.sets} ${tr(c, 'Sätze', 'sets')}',
               style: F.body.copyWith(color: p.ink2),
             ),
             if (d != null) ...[
@@ -680,18 +676,18 @@ class _ExerciseCard extends StatelessWidget {
                     _DeltaChip(d.kg!, _kg(c, d.kg!, sign: true)),
                   _DeltaChip(
                     d.reps.toDouble(),
-                    '${d.reps > 0 ? '+' : ''}${d.reps} ${_t(c, 'Wdh.', 'reps')}',
+                    '${d.reps > 0 ? '+' : ''}${d.reps} ${tr(c, 'Wdh.', 'reps')}',
                   ),
                   if (d.volumeKg != null)
                     _DeltaChip(
                       d.volumeKg!,
-                      '${_kg(c, d.volumeKg!, sign: true)} ${_t(c, 'Volumen', 'volume')}',
+                      '${_kg(c, d.volumeKg!, sign: true)} ${tr(c, 'Volumen', 'volume')}',
                     ),
                 ],
               ),
               const SizedBox(height: S.x1),
               Text(
-                _t(c, 'gegenüber der Einheit davor', 'vs the session before'),
+                tr(c, 'gegenüber der Einheit davor', 'vs the session before'),
                 style: F.over.copyWith(color: p.ink3),
               ),
             ],

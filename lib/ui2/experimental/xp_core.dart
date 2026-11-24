@@ -14,10 +14,10 @@ import '../../data/db.dart';
 import '../../data/local_repository.dart';
 import '../../state/app_state.dart';
 import '../../state/prefs.dart';
+import '../theme.dart';
 
-/// German or English, by the app's current locale.
-String tr(BuildContext c, String de, String en) =>
-    Localizations.localeOf(c).languageCode == 'de' ? de : en;
+import '../plus_text.dart';
+
 
 LocalRepository? xpRepo(BuildContext c) {
   try {
@@ -145,10 +145,10 @@ String stressWord(BuildContext c, double s) => s < 1
         : tr(c, 'Hoch', 'High');
 
 Color stressColor(double s) => s < 1
-    ? const Color(0xFF22C55E)
+    ? C.green
     : s < 2
-        ? const Color(0xFFEAB308)
-        : const Color(0xFFEF4444);
+        ? C.yellow
+        : C.red;
 
 // ── settings ────────────────────────────────────────────────────────────────
 

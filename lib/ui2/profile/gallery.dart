@@ -62,6 +62,10 @@ import '../onboarding/welcome.dart' show ImportOutcome, ImportReport;
 // Screens are deliberately not re-exported from the ui2 barrel (see the
 // barrel test), so their components are imported by path.
 import '../screens/screens.dart';
+import '../../weather/weather.dart' show TodayWeather;
+import '../screens/journal_prompt.dart' show WeatherBox;
+import '../screens/nutrition_plus.dart'
+    show BalanceSource, CreatineRow, WeightForecast, WeightGoalSection;
 import '../ui2.dart';
 import 'devices.dart';
 import 'profile.dart';
@@ -343,6 +347,30 @@ Map<String, Widget> componentCases() => {
       ..._chartCases(),
       ..._coachFigureCases(),
       ..._nutritionAndWellnessCases(),
+      ..._plusCases(),
+    };
+
+/// Edge+ widgets, with the longest text they show: a rainy, windy day with
+/// UV, a weight goal with a forecast, and the creatine row in both states.
+Map<String, Widget> _plusCases() => {
+      'plus_weather': const WeatherBox(TodayWeather(
+          temp: 3.4, feelsLike: -1.2, min: -2, max: 6, code: 63,
+          rainChance: 90, rainMm: 12, uvMax: 7, gustKmh: 62)),
+      'plus_weight_goal': WeightGoalSection(
+        profile: const {
+          'weight_kg': 84.5,
+          'weight_target_kg': 78.0,
+          'weight_target_date': '2027-06-01',
+        },
+        forecast: const WeightForecast(-450, 14, BalanceSource.logged),
+        onEdit: () {},
+      ),
+      'plus_weight_goal_empty': WeightGoalSection(
+          profile: const {}, forecast: null, onEdit: () {}),
+      'plus_creatine': const Column(children: [
+        CreatineRow(taken: false),
+        CreatineRow(taken: true),
+      ]),
     };
 
 /// The AI coach's figures. The model authors these specs, so the cases that
