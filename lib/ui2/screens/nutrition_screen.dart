@@ -29,6 +29,7 @@ import '../ui2.dart';
 import '../onboarding/profile_setup.dart' show formatDay;
 import 'journal_compose.dart' show OsTextField;
 import 'log_food.dart';
+import 'nutrition_plus.dart';
 import '../profile/profile.dart' show ProfileAvatar;
 
 class NutritionScreen extends StatefulWidget {
@@ -126,6 +127,7 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
       _profile = {...?app.user};
       _loading = false;
     });
+    ensureCreatineReminder(_profile);
   }
 
   NutritionDay? get _today {
@@ -361,6 +363,14 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
                 : () => _stepWater(1),
           );
         }),
+        const SizedBox(height: S.x3),
+        CreatineRow(
+          taken: creatineTakenToday(_profile),
+          onTap: () async {
+            await setCreatineTaken(c, !creatineTakenToday(_profile));
+            if (mounted) await _load();
+          },
+        ),
         if (day != null && day.logged && day.kcal.isFloor) ...[
           const SizedBox(height: S.x4),
           StatusCard(
@@ -618,6 +628,10 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
     await _load();
   }
 
+  Future<void> _editWeightGoal() async {
+    if (await editWeightGoal(context) && mounted) await _load();
+  }
+
   Widget _goalsTab(BuildContext c) {
     final l = AppLocalizations.of(c);
     final p = P.of(c);
@@ -650,6 +664,22 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
             action: l?.nutritionEditAction ?? 'Edit',
             onAction: _editTargets,
           ),
+        Section(
+          'Zielgewicht',
+          WeightGoalSection(
+            profile: _profile,
+            forecast: weightBalance(
+              week: _week,
+              burnedByDate: _burnedByDate,
+              wornMinByDate: _wornMinByDate,
+              kcalTarget: _target('kcal_target'),
+              today: _date,
+            ),
+            onEdit: _editWeightGoal,
+          ),
+          action: l?.nutritionEditAction ?? 'Edit',
+          onAction: _editWeightGoal,
+        ),
         const SizedBox(height: S.x4),
         Surface(
           child: Column(
