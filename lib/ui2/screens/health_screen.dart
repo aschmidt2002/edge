@@ -26,7 +26,6 @@ import '../profile/profile.dart' show ProfileAvatar;
 import '../profile/wearable_numbers.dart'
     show WearableCells, kHealthWearableRows;
 import '../ui2.dart';
-import '../guides/help_entry.dart';
 import 'advanced.dart';
 import 'ecg.dart' show EcgEntryCard, pairedIsMaverickOf;
 import 'dental_screen.dart' show DentalScreen;
@@ -37,7 +36,7 @@ import 'home_screen.dart';
 import 'investigate.dart';
 import 'metric_detail.dart';
 import 'wellness_screen.dart';
-import '../experimental/xp_features.dart' show XpScreen, loadBioAge;
+import '../experimental/xp_features.dart' show BioAgeCard;
 
 /// A read this screen can live without. The wear block and the nap block are
 /// ADDITIONS to the repository interface, so an implementation written before
@@ -511,10 +510,10 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         l?.healthTabOverview ?? 'Overview',
         l?.healthTabExplore ?? 'Explore',
         l?.healthTabTrends ?? 'Trends',
-        l?.healthTabVitals ?? 'Vitals',
-        l?.healthTabLabs ?? 'Labs',
       ];
-  late int _tab = widget.tab;
+  // Edge+: Trends, Vitals and Labs are one tab now; an old index 3 or 4
+  // lands on it.
+  late int _tab = widget.tab.clamp(0, 2);
 
   HealthData? _d;
   VitalsData? _v;
@@ -664,8 +663,10 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   void _select(int i) {
     setState(() => _tab = i);
     if (i == 1) _loadExplore();
-    if (i == 3) _loadVitals();
-    if (i == 4) _loadLabs();
+    if (i == 2) {
+      _loadVitals();
+      _loadLabs();
+    }
   }
 
   @override
@@ -696,11 +697,17 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         switch (_tab) {
           0 => _overview(c, d),
           1 => _explore(c),
-          2 => _trends(c, d),
-          3 => _vitals(c, d),
-          _ => _labs(c),
+          _ => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _trends(c, d),
+                const SizedBox(height: S.x5),
+                _vitals(c, d),
+                const SizedBox(height: S.x5),
+                _labs(c),
+              ],
+            ),
         },
-      const HelpEntry(topic: GuideTopic.health),
     ]);
     if (!widget.pushed) return list;
     return Scaffold(
@@ -913,6 +920,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
           );
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // Edge+: biological age leads the overview.
+      const BioAgeCard(),
       // WHOOP MG only: the ECG door appears once the paired band has
       // positively identified itself as an MG, and stays while it is away.
       if (pairedIsMaverickOf(c)) ...[
@@ -1186,10 +1195,8 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
                 setState(() => _vFailed = false);
                 _loadVitals();
               })
-            : const Padding(
-                padding: EdgeInsets.only(top: S.x8),
-                child: Center(child: CircularProgressIndicator()),
-              ),
+            // Edge+: one tab with Trends above, so no spinner of its own.
+            : const SizedBox.shrink(),
       ]);
     }
 
@@ -1330,15 +1337,6 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         const SizedBox(height: S.x3),
         Surface(child: _hrvPreview(c, d)),
       ],
-
-      // Edge+: biological age, out of the experiments (experimental).
-      const SizedBox(height: S.x3),
-      detailLinkRow(
-          c,
-          LucideIcons.hourglass,
-          tr(c, 'Biologisches Alter', 'Biological age'),
-          '',
-          () => go(c, XpScreen(tr(c, 'Biologisches Alter', 'Biological age'), loadBioAge))),
 
       // The research charts, all behind one door.
       const SizedBox(height: S.x3),
@@ -1550,10 +1548,7 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
               setState(() => _lFailed = false);
               _loadLabs();
             })
-          : const Padding(
-              padding: EdgeInsets.only(top: S.x8),
-              child: Center(child: CircularProgressIndicator()),
-            );
+          : const SizedBox.shrink();
     }
 
     final sex = (_d?.profile['sex'])?.toString();

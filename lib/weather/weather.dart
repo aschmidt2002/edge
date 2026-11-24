@@ -91,15 +91,16 @@ List<String> weatherHints(TodayWeather w, {bool de = true}) => [
       if (w.gustKmh >= 50) de ? 'Heute wird es windig.' : 'Windy today.',
     ];
 
-/// Today's weather here, or null when location or network say no.
+/// Today's weather here, or null when no place and no network.
 ///
-/// One fetch per app run, so the morning sheet finds it ready when the shell
-/// started it early. A fix that fails falls back to the last place a fix
-/// worked, so a slow GPS no longer means no weather.
+/// Kept for 30 minutes, so the morning sheet finds it ready when the shell
+/// started it early and the greeting's temperature stays current.
 Future<TodayWeather?> fetchTodayWeather() {
-  final day = DateTime.now().day;
-  if (_memo == null || _memoDay != day) {
-    _memoDay = day;
+  final now = DateTime.now();
+  if (_memo == null ||
+      _memoAt == null ||
+      now.difference(_memoAt!) > const Duration(minutes: 30)) {
+    _memoAt = now;
     _memo = _fetch().then((w) {
       if (w == null) _memo = null; // try again next time
       return w;
@@ -109,37 +110,100 @@ Future<TodayWeather?> fetchTodayWeather() {
 }
 
 Future<TodayWeather?>? _memo;
-int? _memoDay;
+DateTime? _memoAt;
 
 const _kLat = 'plus.weather_lat';
 const _kLon = 'plus.weather_lon';
+const _kManual = 'plus.weather_place'; // a place typed in by hand, or ''
 
+(double, double)? _stored() {
+  final lat = double.tryParse(Prefs.getString(_kLat, ''));
+  final lon = double.tryParse(Prefs.getString(_kLon, ''));
+  return lat == null || lon == null ? null : (lat, lon);
+}
+
+void _store(double lat, double lon) {
+  Prefs.setString(_kLat, lat.toStringAsFixed(2));
+  Prefs.setString(_kLon, lon.toStringAsFixed(2));
+}
+
+/// The place typed in by hand, if any.
+String weatherPlace() => Prefs.getString(_kManual, '');
+
+/// Where to ask the forecast for, best first: a place typed in by hand, the
+/// phone's own fix, the last place that worked, then the network's guess
+/// from the IP address. Null only when all of them fail.
 Future<(double, double)?> _position() async {
+  if (weatherPlace().isNotEmpty) {
+    if (_stored() case final s?) return s;
+  }
   try {
-    if (!await Geolocator.isLocationServiceEnabled()) return null;
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
+    if (await Geolocator.isLocationServiceEnabled()) {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm != LocationPermission.denied &&
+          perm != LocationPermission.deniedForever) {
+        Position? pos;
+        try {
+          pos = await Geolocator.getLastKnownPosition();
+        } catch (_) {}
+        pos ??= await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 20)),
+        );
+        _store(pos.latitude, pos.longitude);
+        return (pos.latitude, pos.longitude);
+      }
     }
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
-      return null;
+  } catch (_) {}
+  if (_stored() case final s?) return s;
+  // No fix and nothing stored: the network's coarse guess (city level).
+  try {
+    final r = await http
+        .get(Uri.https('ipwho.is', '/', {'fields': 'success,latitude,longitude'}))
+        .timeout(const Duration(seconds: 8));
+    final j = jsonDecode(r.body);
+    if (j is Map && j['success'] == true) {
+      final lat = (j['latitude'] as num?)?.toDouble();
+      final lon = (j['longitude'] as num?)?.toDouble();
+      if (lat != null && lon != null) {
+        _store(lat, lon);
+        return (lat, lon);
+      }
     }
-    Position? pos;
-    try {
-      pos = await Geolocator.getLastKnownPosition();
-    } catch (_) {}
-    pos ??= await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 20)),
-    );
-    Prefs.setString(_kLat, pos.latitude.toStringAsFixed(2));
-    Prefs.setString(_kLon, pos.longitude.toStringAsFixed(2));
-    return (pos.latitude, pos.longitude);
+  } catch (_) {}
+  return null;
+}
+
+/// Look [name] up (Open-Meteo geocoding) and use it for the weather from now
+/// on. Empty [name] goes back to the phone's location. False when the place
+/// is not found.
+Future<bool> setWeatherPlace(String name) async {
+  name = name.trim();
+  _memo = null;
+  if (name.isEmpty) {
+    Prefs.setString(_kManual, '');
+    return true;
+  }
+  try {
+    final r = await http
+        .get(Uri.https('geocoding-api.open-meteo.com', '/v1/search',
+            {'name': name, 'count': '1'}))
+        .timeout(const Duration(seconds: 10));
+    final j = jsonDecode(r.body);
+    final res = j is Map ? j['results'] : null;
+    if (res is! List || res.isEmpty || res.first is! Map) return false;
+    final hit = res.first as Map;
+    final lat = (hit['latitude'] as num?)?.toDouble();
+    final lon = (hit['longitude'] as num?)?.toDouble();
+    if (lat == null || lon == null) return false;
+    _store(lat, lon);
+    Prefs.setString(_kManual, '${hit['name'] ?? name}');
+    return true;
   } catch (_) {
-    final lat = double.tryParse(Prefs.getString(_kLat, ''));
-    final lon = double.tryParse(Prefs.getString(_kLon, ''));
-    return lat == null || lon == null ? null : (lat, lon);
+    return false;
   }
 }
 

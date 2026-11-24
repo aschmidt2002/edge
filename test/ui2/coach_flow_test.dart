@@ -192,7 +192,11 @@ void main() {
       await settleLiveGuide(t);
       expect(find.text('Before you sign in'), findsNothing);
       expect(config.configured, isFalse);
-      expect(fake.requests, isEmpty);
+      // Edge+: Home's greeting asks for the weather; nothing went to a coach.
+      expect(
+          fake.requests.where((r) =>
+              r.url.host != 'ipwho.is' && !r.url.host.endsWith('open-meteo.com')),
+          isEmpty);
       app.navigator.pop();
       await settleLiveGuide(t);
       expect(find.text('No model is set up'), findsOneWidget);
@@ -250,16 +254,8 @@ void main() {
       await settleLiveGuide(t);
       await _reveal(t, _press('Ask the coach'));
       final chip = t.getRect(_press('Ask the coach'));
-      await _reveal(
-        t,
-        find.widgetWithText(TextButton, 'Looking for something?'),
-      );
-      final footer = t.getRect(
-        find.widgetWithText(TextButton, 'Looking for something?'),
-      );
-      final movedChip = t.getRect(_press('Ask the coach'));
-      expect(movedChip.bottom, lessThanOrEqualTo(footer.top));
-      expect(movedChip.size, chip.size);
+      // Edge+: Help lives in Profile, so the chip is the page's last row.
+      expect(chip.isEmpty, isFalse);
       await t.tap(_press('Ask the coach'));
       await settleLiveGuide(t);
       expect(find.byType(CoachScreen), findsOneWidget);

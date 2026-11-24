@@ -103,10 +103,11 @@ void main() {
     // The user opens Vitals for the first time. Its read parks mid-flight.
     final parked = Completer<void>();
     repo.hold = parked;
-    await t.tap(find.text('Vitals'));
+    // Edge+: Vitals sits under Trends now, on one tab.
+    await t.tap(find.text('Trends'));
     await _settle(t);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget,
-        reason: 'the sub-tab should still be loading — nothing to race yet');
+    expect(find.text('11.0'), findsNothing,
+        reason: 'the vitals read should still be loading — nothing to race yet');
 
     final before = t.state(find.byType(HealthScreen));
 

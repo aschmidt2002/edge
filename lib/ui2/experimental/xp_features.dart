@@ -686,7 +686,11 @@ class _GoalRingsState extends State<GoalRings> with RevisionReload {
               builder: (_) => XpScreen(title, loadGoals)));
           if (mounted) reload();
         },
-        child: Row(children: [
+        child: Column(children: [
+          Text(tr(c, 'Wochenziele', 'Weekly goals').toUpperCase(),
+              style: F.over.copyWith(color: p.ink3)),
+          const SizedBox(height: S.x2),
+          Row(children: [
           for (final g in goals)
             Expanded(
               child: Column(children: [
@@ -708,6 +712,7 @@ class _GoalRingsState extends State<GoalRings> with RevisionReload {
                     style: F.mini.copyWith(color: p.ink3)),
               ]),
             ),
+          ]),
         ]),
       ),
     );
@@ -876,10 +881,13 @@ Future<List<Widget>> loadWeekPlan(
   return (age: age + parts.values.reduce((a, b) => a + b), parts: parts);
 }
 
-Future<List<Widget>> loadBioAge(
-    BuildContext c, LocalRepository repo, VoidCallback reload) async {
+/// Biological age now and 3–6 months ago, from stored data. Null without an
+/// age in the profile or without 30 days of data.
+Future<({double real, double age, Map<String, double> parts, double? then})?>
+    xpBioAgeNow(LocalRepository repo) async {
   final profile = await repo.getProfile();
   final age = (profile['age'] as num?)?.toDouble();
+  if (age == null) return null;
   final female = '${profile['sex'] ?? ''}'.toLowerCase().startsWith('f');
   final sessions = await repo.getSessions(
       from: DateTime.now().subtract(const Duration(days: 365)).millisecondsSinceEpoch ~/ 1000);
@@ -891,34 +899,40 @@ Future<List<Widget>> loadBioAge(
   final hrv = await xpSeries(repo, 'hrv', days: 180);
   final sleep = await xpSeries(repo, 'sleep', days: 180);
   final steps = await xpSeries(repo, 'steps', days: 180);
-  if (!c.mounted) return const [];
-  if (age == null) {
-    return [xpNote(c, tr(c, 'Trage dein Alter im Profil ein, dann lässt sich das biologische Alter schätzen.',
-        'Add your age in your profile to estimate a biological age.'))];
-  }
   final now = DateTime.now();
   double? win(List<(DateTime, double)> s, int fromDays, int toDays) => avgOf([
         for (final e in s)
           if (now.difference(e.$1).inDays >= fromDays && now.difference(e.$1).inDays < toDays) e.$2
       ]);
   final vo2 = vo2s.isEmpty ? null : medianOf(vo2s.take(5).toList());
-  final cur = bioAge(
-      age: age, female: female, vo2: vo2,
-      rhr: win(rhr, 0, 30), hrv: win(hrv, 0, 30),
-      sleepH: win(sleep, 0, 30) == null ? null : win(sleep, 0, 30)! / 60,
-      steps: win(steps, 0, 30));
-  final then = bioAge(
-      age: age, female: female, vo2: vo2,
-      rhr: win(rhr, 90, 180), hrv: win(hrv, 90, 180),
-      sleepH: win(sleep, 90, 180) == null ? null : win(sleep, 90, 180)! / 60,
-      steps: win(steps, 90, 180));
-  if (cur == null) {
-    return [xpNote(c, tr(c, 'Noch zu wenige Daten aus den letzten 30 Tagen.', 'Not enough data from the last 30 days yet.'))];
+  ({double age, Map<String, double> parts})? at(int from, int to) {
+    final sl = win(sleep, from, to);
+    return bioAge(
+        age: age, female: female, vo2: vo2,
+        rhr: win(rhr, from, to), hrv: win(hrv, from, to),
+        sleepH: sl == null ? null : sl / 60,
+        steps: win(steps, from, to));
   }
-  final diff = cur.age - age;
+  final cur = at(0, 30);
+  if (cur == null) return null;
+  return (real: age, age: cur.age, parts: cur.parts, then: at(90, 180)?.age);
+}
+
+String bioAgeDiff(double diff) =>
+    '${diff <= 0 ? '−' : '+'}${diff.abs().toStringAsFixed(1)}';
+
+Future<List<Widget>> loadBioAge(
+    BuildContext c, LocalRepository repo, VoidCallback reload) async {
+  final b = await xpBioAgeNow(repo);
+  if (!c.mounted) return const [];
+  if (b == null) {
+    return [xpNote(c, tr(c, 'Braucht dein Alter im Profil und 30 Tage Daten.',
+        'Needs your age in your profile and 30 days of data.'))];
+  }
+  final diff = b.age - b.real;
   // Pace: how many "years" the score moved over the ~4.5 months between the
   // two windows, per calendar year. 1.0 = ageing in step with the calendar.
-  final pace = then == null ? null : 1 + (cur.age - then.age) / (135 / 365);
+  final pace = b.then == null ? null : 1 + (b.age - b.then!) / (135 / 365);
   final labels = {
     'vo2': 'VO₂max',
     'rhr': tr(c, 'Ruhepuls', 'Resting HR'),
@@ -926,23 +940,79 @@ Future<List<Widget>> loadBioAge(
     'sleep': tr(c, 'Schlafdauer', 'Sleep duration'),
     'steps': tr(c, 'Schritte', 'Steps'),
   };
+  final years = tr(c, 'J.', 'y');
   return [
-    xpStat(c, tr(c, 'Biologisches Alter', 'Biological age'), cur.age.toStringAsFixed(1),
-        sub: tr(c, '${diff <= 0 ? '${(-diff).toStringAsFixed(1)} Jahre jünger' : '${diff.toStringAsFixed(1)} Jahre älter'} als dein Alter (${age.round()}).',
-            '${diff <= 0 ? '${(-diff).toStringAsFixed(1)} years younger' : '${diff.toStringAsFixed(1)} years older'} than your age (${age.round()}).'),
+    xpStat(c, tr(c, 'Biologisches Alter', 'Biological age'), b.age.toStringAsFixed(1),
+        sub: '${bioAgeDiff(diff)} $years · ${tr(c, 'echt', 'real')} ${b.real.round()}',
         color: diff <= 0 ? C.green : C.orange),
+    xpSection(tr(c, 'Was es ausmacht', 'What moves it'), [
+      for (final e in b.parts.entries)
+        xpBar(c, labels[e.key] ?? e.key, (e.value.abs() / 6).clamp(0.0, 1.0),
+            '${e.value >= 0 ? '+' : '−'}${e.value.abs().toStringAsFixed(1)} $years',
+            color: e.value <= 0 ? C.green : C.orange),
+    ]),
     if (pace != null)
       xpStat(c, tr(c, 'Tempo des Alterns', 'Pace of aging'), '${pace.clamp(-1.0, 3.0).toStringAsFixed(2)}×',
-          sub: tr(c, 'Verglichen mit vor 3–6 Monaten. Unter 1,0 heißt: langsamer als der Kalender.',
-              'Compared with 3–6 months ago. Below 1.0 means slower than the calendar.'),
           color: pace <= 1 ? C.green : C.orange),
-    xpSection(tr(c, 'Was es ausmacht', 'What moves it'), [
-      for (final e in cur.parts.entries)
-        xpNote(c, '${labels[e.key]}: ${e.value >= 0 ? '+' : '−'}${e.value.abs().toStringAsFixed(1)} ${tr(c, 'Jahre', 'years')}'),
-    ]),
-    xpNote(c, tr(c, 'Eine grobe Schätzung aus Durchschnittswerten deiner letzten 30 Tage gegen Normwerte für dein Alter. Kein medizinischer Wert.',
-        'A rough estimate from your last 30 days against norms for your age. Not a medical measure.')),
   ];
+}
+
+/// Edge+: biological age at the top of Health → Overview. Only the age and
+/// the years against the real one; a tap shows what moves it.
+class BioAgeCard extends StatefulWidget {
+  const BioAgeCard({super.key});
+
+  @override
+  State<BioAgeCard> createState() => _BioAgeCardState();
+}
+
+class _BioAgeCardState extends State<BioAgeCard> with RevisionReload {
+  ({double real, double age, Map<String, double> parts, double? then})? _b;
+
+  @override
+  void initState() {
+    super.initState();
+    reload();
+  }
+
+  @override
+  void reload() async {
+    final repo = xpRepo(context);
+    if (repo == null) return;
+    final t = beginRead(#bioAge);
+    try {
+      final b = await xpBioAgeNow(repo);
+      if (stillNewest(#bioAge, t)) setState(() => _b = b);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final b = _b;
+    if (b == null) return const SizedBox.shrink();
+    final p = P.of(c);
+    final diff = b.age - b.real;
+    final title = tr(c, 'Biologisches Alter', 'Biological age');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: S.x4),
+      child: Surface(
+        semanticLabel: '$title ${b.age.toStringAsFixed(1)}',
+        onTap: () => Navigator.of(c).push(MaterialPageRoute<void>(
+            builder: (_) => XpScreen(title, loadBioAge))),
+        child: Row(children: [
+          Icon(LucideIcons.hourglass, size: 20, color: p.on(C.teal)),
+          const SizedBox(width: S.x3),
+          Expanded(
+              child: Text(title,
+                  style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600))),
+          Text(b.age.toStringAsFixed(1), style: F.n24.copyWith(color: p.ink)),
+          const SizedBox(width: S.x2),
+          Text('${bioAgeDiff(diff)} ${tr(c, 'J.', 'y')}',
+              style: F.cap.copyWith(color: p.on(diff <= 0 ? C.green : C.orange))),
+        ]),
+      ),
+    );
+  }
 }
 
 // ═══ 11 · Gesundheitsbericht ═════════════════════════════════════════════════

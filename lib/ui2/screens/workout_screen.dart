@@ -50,7 +50,6 @@ import '../experimental/xp_features.dart'
 import '../../data/local_repository.dart' show kDefaultStepGoal;
 import '../profile/profile.dart' show ProfileAvatar, openProfile;
 import '../grammar.dart';
-import '../guides/help_entry.dart';
 import '../revision.dart';
 import '../plus_text.dart';
 import '../theme.dart';
@@ -144,7 +143,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
             if (!didPop) setState(() => tab = 0);
           },
           child: ListView(
-          padding: const EdgeInsets.fromLTRB(0, S.x2, 0, S.x16),
+          padding: const EdgeInsets.fromLTRB(0, S.x2, 0, S.x6),
           children: [
             for (final w in <Widget>[
               ScreenTitle(loc?.tabActivity ?? 'Activity',
@@ -154,7 +153,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
               else
                 const SizedBox(height: S.x3),
               ...body,
-              const HelpEntry(topic: GuideTopic.activity),
             ])
               if (w is StartCard)
                 w

@@ -120,6 +120,7 @@ const Map<String, String> kPrefTypes = {
   'plus.fast_goal_h': 'int', // Edge+: fasting goal in hours
   'plus.weather_lat': 'string', // Edge+: last weather location
   'plus.weather_lon': 'string',
+  'plus.weather_place': 'string', // Edge+: weather place typed in by hand
   // Edge+ experiments: JSON settings (goals, weekly plan, wake time).
   'xp.goals': 'string',
   'xp.weekplan': 'string',

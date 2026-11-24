@@ -513,7 +513,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(S.x4, S.x4, S.x4, S.x16),
+        padding: const EdgeInsets.fromLTRB(S.x4, S.x4, S.x4, S.x6),
         children: [
           // Edge+: band status · night · profile, the same header as Home.
           TabHeader(
@@ -534,10 +534,22 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
           if (!_failed && (_d?.isLatestNight ?? _day == null))
             ...widget.todayFooter,
           ...widget.footer,
+          if (_d case final d? when !_failed) ...[
+            const SizedBox(height: S.x3),
+            _nerdRow(c, d),
+          ],
         ],
       ),
     );
   }
+
+  /// The door into this night's Nerd stats.
+  Widget _nerdRow(BuildContext c, SleepData d) => detailLinkRow(
+      c,
+      LucideIcons.cpu,
+      AppLocalizations.of(c)?.metricDetailNerdStatsTitle ?? 'Nerd stats',
+      '',
+      () => go(c, Investigate('sleep', day: _day ?? d.day)));
 
   /// The day stepper in the body — not on the tab, where [TabHeader] carries
   /// it (Edge+).
@@ -938,13 +950,9 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       // meant stepping back to Tuesday and then tapping Nerd stats landed
       // on last night — the same numbers every time, whichever day you
       // came from.
-      // Edge+: the title alone; the subtitle described the door.
-      detailLinkRow(
-          c,
-          LucideIcons.cpu,
-          l?.metricDetailNerdStatsTitle ?? 'Nerd stats',
-          '',
-          () => go(c, Investigate('sleep', day: _day ?? d.day))),
+      // Edge+: the title alone; the subtitle described the door. On the tab
+      // it closes the page, under the footer (see [_frame]).
+      if (!widget.embedded) _nerdRow(c, d),
     ]);
   }
 

@@ -352,7 +352,7 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
         if (!didPop) setState(() => _tab = 0);
       },
       child: ListView(
-        padding: EdgeInsets.fromLTRB(S.x4, widget.page ? 0 : S.x4, S.x4, S.x16),
+        padding: EdgeInsets.fromLTRB(S.x4, widget.page ? 0 : S.x4, S.x4, S.x6),
         children: [
           if (!widget.page)
             ScreenTitle(l?.nutritionTitle ?? 'Nutrition',
