@@ -8,9 +8,9 @@ import '../../l10n/display_text.dart';
 // underneath, opened deliberately, and never the path a new user is walked
 // down.
 //
-// Edge+: there IS a photo estimate. A meal photo goes to Claude with the
-// user's own API key (lib/ai/food_photo.dart) and its estimate PRE-FILLS the
-// number boxes; Claude may ask up to two short questions, answered here, to
+// Edge+: there IS a photo estimate. A meal photo goes to Gemini (free key)
+// or Claude with the user's own API key (lib/ai/food_photo.dart) and its estimate PRE-FILLS the
+// number boxes; the model may ask up to two short questions, answered here, to
 // refine it. Nothing is written until the user presses Save, which is the
 // confirmation `FoodEntry.sanitised` asks of a photo entry.
 //
@@ -42,7 +42,7 @@ import '../profile/profile.dart' show SetRow;
 import '../ui2.dart';
 import 'journal_compose.dart' show OsTextField;
 import 'log_workout.dart' show dayLabel;
-import 'claude_key_sheet.dart';
+import 'food_ai_key_sheet.dart';
 import 'scan_barcode.dart';
 
 class LogFoodSheet extends StatefulWidget {
@@ -127,6 +127,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   FoodPhotoEstimate? _estimate;
   bool _estimating = false;
   String? _photoError;
+  FoodAi _ai = FoodAi.gemini;
   List<TextEditingController> _answers = const [];
 
   @override
@@ -302,15 +303,15 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
   String _lang(BuildContext c) =>
       Localizations.localeOf(c).languageCode == 'de' ? 'de' : 'en';
 
-  /// Take (or pick) a photo and ask Claude for an estimate. Asks for the API
+  /// Take (or pick) a photo and ask the AI for an estimate. Asks for an API
   /// key first when none is stored.
   Future<void> _takePhoto() async {
-    var key = await ClaudeKey.read();
-    if (key == null) {
+    var ai = await activeFoodAi();
+    if (ai == null) {
       if (!mounted) return;
-      await editClaudeKey(context);
-      key = await ClaudeKey.read();
-      if (key == null || !mounted) return;
+      await editFoodAiKeys(context);
+      ai = await activeFoodAi();
+      if (ai == null || !mounted) return;
     }
     if (!mounted) return;
     final source = await _askPhotoSource(context);
@@ -334,17 +335,18 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     }
     if (shot == null || !mounted) return;
     _photo = await shot.readAsBytes();
-    await _estimatePhoto(key);
+    await _estimatePhoto(ai);
   }
 
   /// Ask again from the same photo, with the answers typed so far.
   Future<void> _reestimate() async {
-    final key = await ClaudeKey.read();
-    if (key == null || !mounted) return;
-    await _estimatePhoto(key, withAnswers: true);
+    final ai = await activeFoodAi();
+    if (ai == null || !mounted) return;
+    await _estimatePhoto(ai, withAnswers: true);
   }
 
-  Future<void> _estimatePhoto(String key, {bool withAnswers = false}) async {
+  Future<void> _estimatePhoto((FoodAi, String) ai,
+      {bool withAnswers = false}) async {
     final photo = _photo;
     if (photo == null) return;
     final qs = _estimate?.questions ?? const <String>[];
@@ -357,12 +359,14 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
         : const <FoodQa>[];
     setState(() {
       _estimating = true;
+      _ai = ai.$1;
       _photoError = null;
       _detail = true;
     });
     try {
-      final est = await estimateFoodPhoto(
-        apiKey: key,
+      final est = await estimateFoodPhotoWith(
+        ai.$1,
+        apiKey: ai.$2,
         jpeg: photo,
         lang: _lang(context),
         answers: answers,
@@ -412,7 +416,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     }
   }
 
-  /// The questions Claude asked, with a box each, and what it assumed.
+  /// The questions the AI asked, with a box each, and what it assumed.
   List<Widget> _photoBlock(BuildContext c) {
     final p = P.of(c);
     final est = _estimate;
@@ -421,7 +425,8 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
       out.addAll([
         const SizedBox(height: S.x3),
         StatusCard(
-          tr(c, 'Claude schaut sich das Foto an', 'Claude is looking at the photo'),
+          tr(c, '${foodAiName(_ai)} schaut sich das Foto an',
+              '${foodAiName(_ai)} is looking at the photo'),
           tr(c, 'Das dauert meist 10 bis 30 Sekunden.',
               'This usually takes 10 to 30 seconds.'),
           icon: LucideIcons.camera,
@@ -450,7 +455,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     out.addAll([
       const SizedBox(height: S.x3),
       Text(
-        '${tr(c, 'Claude-Schätzung', 'Claude estimate')} ($conf)$portion'
+        '${tr(c, '${foodAiName(_ai)}-Schätzung', '${foodAiName(_ai)} estimate')} ($conf)$portion'
         '${est.note.isEmpty ? '' : '. ${est.note}'}',
         style: F.cap.copyWith(color: p.ink3, height: 1.45),
       ),
@@ -734,8 +739,8 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
                 LucideIcons.camera,
                 C.domFood,
                 tr(c, 'Foto vom Essen', 'Photo of the meal'),
-                sub: tr(c, 'Claude schätzt die Nährwerte',
-                    'Claude estimates the nutrition'),
+                sub: tr(c, 'KI schätzt die Nährwerte',
+                    'AI estimates the nutrition'),
                 chevron: false,
                 onTap: _estimating ? null : _takePhoto,
               ),

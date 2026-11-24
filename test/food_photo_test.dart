@@ -53,4 +53,63 @@ void main() {
             200, '{"stop_reason":"refusal","content":[]}'),
         throwsA(isA<FoodPhotoException>()));
   });
+
+  group('gemini', () {
+    String ok(Map<String, dynamic> est) => jsonEncode({
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': 'thinking…', 'thought': true},
+                  {'text': jsonEncode(est)},
+                ],
+              },
+              'finishReason': 'STOP',
+            },
+          ],
+        });
+
+    test('reads the estimate, skipping thought parts', () {
+      final e = parseGeminiResponse(
+          200,
+          ok({
+            'label': 'Müsli',
+            'portion_g': 250,
+            'kcal': 410,
+            'protein_g': 14,
+            'carbs_g': 60,
+            'fat_g': 11,
+            'fibre_g': 8,
+            'confidence': 'high',
+            'questions': [],
+            'note': '',
+          }));
+      expect(e.label, 'Müsli');
+      expect(e.kcal, 410);
+      expect(e.questions, isEmpty);
+    });
+
+    test('a used-up free quota says so', () {
+      expect(
+          () => parseGeminiResponse(429, '{"error":{"message":"quota"}}',
+              lang: 'de'),
+          throwsA(isA<FoodPhotoException>()
+              .having((e) => e.message, 'message', contains('Kontingent'))));
+    });
+
+    test('an invalid key says so', () {
+      expect(
+          () => parseGeminiResponse(
+              400, '{"error":{"message":"API key not valid."}}'),
+          throwsA(isA<FoodPhotoException>()
+              .having((e) => e.message, 'message', contains('Gemini key'))));
+    });
+
+    test('a blocked prompt is an error', () {
+      expect(
+          () => parseGeminiResponse(
+              200, '{"promptFeedback":{"blockReason":"SAFETY"}}'),
+          throwsA(isA<FoodPhotoException>()));
+    });
+  });
 }
