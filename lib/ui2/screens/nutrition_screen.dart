@@ -916,8 +916,8 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
           child: SetRow(
             LucideIcons.camera,
             C.domFood,
-            tr(c, 'KI für Essensfotos', 'AI for meal photos'),
-            onTap: () => editFoodAiKeys(c),
+            tr(c, 'KI-Key', 'AI key'),
+            onTap: () => editAiKeys(c),
           ),
         ),
       ],

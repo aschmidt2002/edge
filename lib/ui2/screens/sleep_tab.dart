@@ -89,6 +89,7 @@ class _Doors extends StatelessWidget {
             decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
             child: Flex(
               direction: row ? Axis.horizontal : Axis.vertical,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(d.$1, size: 20, color: p.ink2),
                 SizedBox(width: row ? S.x3 : 0, height: row ? 0 : S.x2),
@@ -108,12 +109,16 @@ class _Doors extends StatelessWidget {
         ],
       ]);
     }
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      for (var i = 0; i < doors.length; i++) ...[
-        if (i > 0) const SizedBox(width: S.x2),
-        Expanded(child: door(doors[i], row: false)),
-      ],
-    ]);
+    // Equal thirds AND equal height: a one-line word ("Wecker") used to
+    // leave its tile shorter than the two-line ones beside it.
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        for (var i = 0; i < doors.length; i++) ...[
+          if (i > 0) const SizedBox(width: S.x2),
+          Expanded(child: door(doors[i], row: false)),
+        ],
+      ]),
+    );
   }
 
   static Widget _label(P p, String s, {bool center = false}) => Text(s,

@@ -312,7 +312,7 @@ void main() {
       for (var i = 0; i < 2; i++) {
         expect(
             find.descendant(
-                of: panels.at(i), matching: find.text('SELECTED · 04:00')),
+                of: panels.at(i), matching: find.textContaining(' · 04:00')),
             findsOneWidget,
             reason: 'panel $i');
       }

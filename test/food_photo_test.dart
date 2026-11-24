@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openstrap_edge/ai/food_photo.dart';
+import 'package:openstrap_edge/ai/gemini_coach.dart';
+import 'package:openstrap_edge/coach/coach_config.dart';
 
 void main() {
   String ok(Map<String, dynamic> est) => jsonEncode({
@@ -111,5 +113,12 @@ void main() {
               200, '{"promptFeedback":{"blockReason":"SAFETY"}}'),
           throwsA(isA<FoodPhotoException>()));
     });
+  });
+
+  test('the coach counts as on Gemini only on the Gemini origin', () {
+    expect(coachEndpointOrigin(kGeminiOpenAiBase),
+        'https://generativelanguage.googleapis.com');
+    expect(coachUsesGemini(CoachConfig()), isFalse); // default is OpenAI
+    expect(CoachApi.defaultFor(kGeminiOpenAiBase), CoachApi.chatCompletions);
   });
 }

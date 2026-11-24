@@ -7,6 +7,7 @@ import 'telemetry/telemetry_service.dart';
 import 'ble/ios_ble_restore.dart';
 import 'notify/notification_service.dart';
 import 'coach/coach_config.dart';
+import 'ai/gemini_coach.dart';
 import 'state/app_state.dart';
 import 'state/prefs.dart';
 import 'state/clock_format.dart';
@@ -188,7 +189,12 @@ Future<void> main() async {
   // load lands. First frame must never wait on the keystore.
   final coachConfig = CoachConfig();
   unawaited(
-    coachConfig.load().timeout(const Duration(seconds: 15)).catchError(
+    coachConfig
+        .load()
+        .timeout(const Duration(seconds: 15))
+        // Edge+: a coach never set up adopts the Gemini key from meal photos.
+        .then((_) => adoptGeminiKeyForCoach(coachConfig))
+        .catchError(
           (Object e) =>
               debugPrint('[main] CoachConfig.load failed/timed out: $e'),
         ),

@@ -17,6 +17,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum FoodAi { gemini, claude }
 
@@ -333,7 +334,27 @@ FoodPhotoEstimate parseFoodPhotoResponse(int status, String raw,
 
 /// The `-latest` alias follows Google's current Flash model, which is on the
 /// free tier, so the app does not break when a version is retired.
-const _geminiModel = 'gemini-flash-latest';
+const kGeminiFlash = 'gemini-flash-latest';
+
+/// Slower and more thorough; the free tier allows it only sparingly, if at all.
+const kGeminiPro = 'gemini-pro-latest';
+
+const _kGeminiModel = 'gemini_model';
+
+/// The Gemini model for every AI task (photo and coach). Flash by default.
+Future<String> geminiModel() async {
+  try {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kGeminiModel) == kGeminiPro ? kGeminiPro : kGeminiFlash;
+  } catch (_) {
+    return kGeminiFlash;
+  }
+}
+
+Future<void> setGeminiModel(String model) async {
+  final p = await SharedPreferences.getInstance();
+  await p.setString(_kGeminiModel, model == kGeminiPro ? kGeminiPro : kGeminiFlash);
+}
 
 /// The same fields as [_schema], in the OpenAPI subset Gemini takes.
 const _geminiSchema = {
@@ -379,6 +400,7 @@ Future<FoodPhotoEstimate> estimateFoodPhotoGemini({
   String hint = '',
   http.Client? client,
 }) async {
+  final model = await geminiModel();
   final body = {
     'systemInstruction': {
       'parts': [
@@ -410,7 +432,7 @@ Future<FoodPhotoEstimate> estimateFoodPhotoGemini({
     res = await c
         .post(
           Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/'
-              '$_geminiModel:generateContent'),
+              '$model:generateContent'),
           headers: {
             'content-type': 'application/json',
             'x-goog-api-key': apiKey,
