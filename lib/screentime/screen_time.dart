@@ -27,7 +27,12 @@ import '../state/prefs.dart';
 
 /// One day's screen time.
 class ScreenDay {
-  const ScreenDay({required this.apps, required this.unlocks, this.complete = false});
+  const ScreenDay({
+    required this.apps,
+    required this.unlocks,
+    this.complete = false,
+    this.bed,
+  });
 
   /// Minutes in the foreground, by package. Apps under a minute are left out.
   final Map<String, int> apps;
@@ -36,9 +41,14 @@ class ScreenDay {
   /// Copied after the day had ended, so it will not change again.
   final bool complete;
 
+  /// Minutes taken out because they fell in bed (see ScreenTimeBridge.kt);
+  /// null on a day copied before sleep was checked.
+  final int? bed;
+
   int get total => apps.values.fold(0, (a, b) => a + b);
 
-  Map<String, dynamic> toJson() => {'a': apps, 'u': unlocks, if (complete) 'c': true};
+  Map<String, dynamic> toJson() =>
+      {'a': apps, 'u': unlocks, if (complete) 'c': true, 'b': ?bed};
 
   static ScreenDay? fromJson(Object? m) {
     if (m is! Map) return null;
@@ -51,6 +61,7 @@ class ScreenDay {
       },
       unlocks: (m['u'] as num?)?.toInt() ?? 0,
       complete: m['c'] == true,
+      bed: (m['b'] as num?)?.toInt(),
     );
   }
 }
@@ -129,7 +140,14 @@ class ScreenTime {
 
   /// Copy the days Android still holds. Safe to call often: finished days that
   /// were already copied are skipped.
-  static Future<void> refresh({DateTime? now}) async {
+  ///
+  /// [sleepWindows] is the repository's (onset/wake per night); time in bed is
+  /// taken out natively. A day only counts as finished once the night after it
+  /// has had a morning to sync, so its sleep is known.
+  static Future<void> refresh({
+    DateTime? now,
+    Future<List<Map<String, dynamic>>> Function({int days, String? before})? sleepWindows,
+  }) async {
     if (!await hasAccess()) {
       if (connected) disconnect();
       return;
@@ -138,15 +156,26 @@ class ScreenTime {
     final t = now ?? DateTime.now();
     final all = days();
     final names = labels();
+    var sleep = const <List<int>>[];
+    try {
+      sleep = [
+        for (final w in await sleepWindows?.call(days: _backDays + 3) ?? const [])
+          if (w['onset_ts'] case final int on)
+            if (w['wake_ts'] case final int off) [on * 1000, off * 1000],
+      ];
+    } catch (e) {
+      debugPrint('[screentime] sleep windows failed: $e');
+    }
     for (var back = 0; back <= _backDays; back++) {
       final start = DateTime(t.year, t.month, t.day - back);
       final end = DateTime(t.year, t.month, t.day - back + 1);
       final id = dayLabelOf(start);
-      if (all[id]?.complete ?? false) continue;
+      if (all[id] case final d? when d.complete && d.bed != null) continue;
       try {
         final r = await _ch.invokeMethod<Map<Object?, Object?>>('day', {
           'start': start.millisecondsSinceEpoch,
           'end': end.millisecondsSinceEpoch,
+          'sleep': sleep,
         });
         if (r == null) continue;
         final apps = r['apps'] as Map? ?? const {};
@@ -156,7 +185,8 @@ class ScreenTime {
               '${e.key}': ((e.value as num) / 60000).round(),
           },
           unlocks: (r['unlocks'] as num?)?.toInt() ?? 0,
-          complete: !end.isAfter(t),
+          complete: !end.add(const Duration(hours: 36)).isAfter(t),
+          bed: ((r['bed'] as num?) ?? 0) ~/ 60000,
         );
         for (final e in (r['labels'] as Map? ?? const {}).entries) {
           names['${e.key}'] = '${e.value}';
