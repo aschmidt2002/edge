@@ -73,6 +73,7 @@ object NativeChannels {
         // so the channel exists headless; the sensor listener itself arms on the first
         // Dart call, which only happens when the user has phone steps switched on.
         PhoneStepCounter.register(engine, app)
+        ScreenTimeBridge.register(engine, app) // Edge+
 
         MethodChannel(engine.dartExecutor.binaryMessenger, EDGE_TRACKING_CHANNEL)
             .setMethodCallHandler { call, result ->

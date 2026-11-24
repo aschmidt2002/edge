@@ -36,6 +36,8 @@
 // derives from it yet, because no one on this project has held one
 // (ASSUMPTIONS R6).
 
+import 'dart:io' show Platform;
+
 import '../../l10n/display_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart'
@@ -97,6 +99,8 @@ import 'settings.dart' show backToRoot;
 import 'wearable_numbers.dart' show DeviceUseSwitch, WearableDayScreen;
 import '../../oralb/oralb.dart' show OralBStore;
 import '../screens/dental_screen.dart' show OralBConnectScreen;
+import '../../screentime/screen_time.dart' show ScreenTime;
+import '../screens/screen_time_screen.dart' show ScreenTimeScreen;
 
 /// Measurement quality, which is the ONLY thing that decides precedence.
 enum SourceTier {
@@ -1657,6 +1661,19 @@ extension _PairSection on MyDevicesView {
                     ? OralBStore.deviceName
                     : tr(c, 'Oral-B verbinden', 'Connect an Oral-B'),
                 onTap: () => goto(c, const OralBConnectScreen())),
+          ),
+        ),
+      // Edge+: Digital Wellbeing's screen time (lib/screentime).
+      if (onAddSensor != null && Platform.isAndroid)
+        ValueListenableBuilder<int>(
+          valueListenable: ScreenTime.changed,
+          builder: (c, _, _) => Surface(
+            pad: const EdgeInsets.symmetric(horizontal: S.x4),
+            child: SetRow(LucideIcons.smartphone, C.indigo, tr(c, 'Bildschirmzeit', 'Screen time'),
+                sub: ScreenTime.connected
+                    ? tr(c, 'Digitales Wohlbefinden · verbunden', 'Digital Wellbeing · connected')
+                    : tr(c, 'Digitales Wohlbefinden verbinden', 'Connect Digital Wellbeing'),
+                onTap: () => goto(c, const ScreenTimeScreen())),
           ),
         ),
     ];

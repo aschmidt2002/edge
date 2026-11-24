@@ -209,6 +209,8 @@ const _notComponents = {
   'ProgressSection', 'GoalEditor',
   // Edge+ oral care: Scaffold routes that read Prefs and scan for the brush.
   'DentalScreen', 'OralBConnectScreen',
+  // Edge+ screen time: a Scaffold route that reads Prefs and the journal.
+  'ScreenTimeScreen',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.

@@ -112,6 +112,9 @@ const Map<String, String> kPrefTypes = {
   'edgeplus.oralb.device': 'string', // Edge+: the paired Oral-B brush
   'edgeplus.oralb.name': 'string',
   'edgeplus.oralb.sessions.v1': 'string', // Edge+: heard brushing sessions
+  'edgeplus.screentime.on': 'bool', // Edge+: screen time connected
+  'edgeplus.screentime.days.v1': 'string', // Edge+: screen time per day
+  'edgeplus.screentime.labels.v1': 'string', // Edge+: app names
   'activity.goals': 'string', // Edge+: activity progress goals
   'plus.fast_start': 'int', // Edge+: fasting timer start
   'plus.fast_goal_h': 'int', // Edge+: fasting goal in hours
