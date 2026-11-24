@@ -23,10 +23,22 @@ import java.util.concurrent.Executors
  * ponytail: Android keeps the event log for about a week, so history beyond
  * that exists only for days the app already copied (lib/screentime). The
  * launcher and this app are not counted, as Digital Wellbeing does not.
+ *
+ * Edge+: time in bed is not screen time. Dart passes the band's sleep windows
+ * (onset, wake); anything between them is dropped, and so is the stretch that
+ * runs into sleep onset (the video watched to fall asleep), back to at most
+ * [LEAD_MS] before onset. A stretch that ended more than [PAD_MS] before onset
+ * still counts in full.
+ *
+ * ponytail: a fixed lead and pad, not a per-night bedtime. A long scroll that
+ * just happens to end at lights-out loses up to [LEAD_MS]; refine only if that
+ * shows up in real nights.
  */
 object ScreenTimeBridge {
     private const val CHANNEL = "edgeplus/screen_time"
     private val io = Executors.newSingleThreadExecutor()
+    private const val LEAD_MS = 60 * 60_000L
+    private const val PAD_MS = 15 * 60_000L
 
     fun register(engine: FlutterEngine, app: Context) {
         MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
@@ -41,12 +53,19 @@ object ScreenTimeBridge {
                     "day" -> {
                         val start = (call.argument<Number>("start") ?: 0).toLong()
                         val end = (call.argument<Number>("end") ?: 0).toLong()
+                        val sleep = (call.argument<List<*>>("sleep") ?: emptyList<Any>())
+                            .mapNotNull { w ->
+                                val l = w as? List<*> ?: return@mapNotNull null
+                                val on = (l.getOrNull(0) as? Number)?.toLong()
+                                val off = (l.getOrNull(1) as? Number)?.toLong()
+                                if (on == null || off == null || off <= on) null else on to off
+                            }
                         if (!hasAccess(app) || end <= start) {
                             result.success(null)
                             return@setMethodCallHandler
                         }
                         io.execute {
-                            val out = runCatching { day(app, start, end) }.getOrNull()
+                            val out = runCatching { day(app, start, end, sleep) }.getOrNull()
                             android.os.Handler(android.os.Looper.getMainLooper())
                                 .post { result.success(out) }
                         }
@@ -67,8 +86,16 @@ object ScreenTimeBridge {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    /** {apps: {package: ms}, labels: {package: name}, unlocks: n} for [start, end). */
-    private fun day(ctx: Context, start: Long, end: Long): Map<String, Any> {
+    /**
+     * {apps: {package: ms}, labels: {package: name}, unlocks: n, bed: ms} for
+     * [start, end); `bed` is what [sleep] took out.
+     */
+    private fun day(
+        ctx: Context,
+        start: Long,
+        end: Long,
+        sleep: List<Pair<Long, Long>>,
+    ): Map<String, Any> {
         val usm = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val pm = ctx.packageManager
         val home = pm.resolveActivity(
@@ -82,10 +109,22 @@ object ScreenTimeBridge {
         val open = HashMap<String, MutableSet<String>>() // package -> open activities
         val since = HashMap<String, Long>()
         val total = HashMap<String, Long>()
+        val bed = HashMap<String, Long>()
         var unlocks = 0
         fun close(pkg: String, at: Long) {
             val s = since.remove(pkg) ?: return
-            val ms = minOf(at, end) - maxOf(s, start)
+            val a = maxOf(s, start)
+            val b = minOf(at, end)
+            if (b <= a) return
+            var ms = b - a
+            for ((on, off) in sleep) {
+                if (b <= on - PAD_MS || a >= off) continue
+                val cut = minOf(b, off) - maxOf(a, on - LEAD_MS)
+                if (cut > 0) {
+                    ms -= cut
+                    bed[pkg] = (bed[pkg] ?: 0L) + cut
+                }
+            }
             if (ms > 0) total[pkg] = (total[pkg] ?: 0L) + ms
         }
         val e = UsageEvents.Event()
@@ -123,6 +162,7 @@ object ScreenTimeBridge {
                 pkg
             }
         }
-        return mapOf("apps" to apps, "labels" to labels, "unlocks" to unlocks)
+        val inBed = bed.filterKeys { it !in skip }.values.sum()
+        return mapOf("apps" to apps, "labels" to labels, "unlocks" to unlocks, "bed" to inBed)
     }
 }

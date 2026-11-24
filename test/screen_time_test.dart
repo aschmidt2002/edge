@@ -54,4 +54,11 @@ void main() {
     expect(m[day(2)], 5);
     expect(m.containsKey(day(1)), isFalse);
   });
+
+  test('a day keeps its in-bed minutes; an old day without them reads null', () {
+    final d = ScreenDay.fromJson(
+        const ScreenDay(apps: {'a': 5}, unlocks: 2, complete: true, bed: 40).toJson())!;
+    expect(d.bed, 40);
+    expect(ScreenDay.fromJson({'a': {'a': 5}, 'u': 2, 'c': true})!.bed, isNull);
+  });
 }

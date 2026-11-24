@@ -2195,7 +2195,7 @@ class AppState extends ChangeNotifier {
     if (_disposed || !Platform.isAndroid) return;
     (_scaleWatcher ??= ScalePresenceWatcher()).start();
     OralBWatcher.instance.start(); // Edge+: the toothbrush, same lifetime
-    if (ScreenTime.connected) unawaited(ScreenTime.refresh()); // Edge+
+    if (ScreenTime.connected) unawaited(ScreenTime.refresh(sleepWindows: repo?.sleepWindows)); // Edge+
   }
 
   /// Central disposal guard.
