@@ -15,6 +15,7 @@
 import 'guide.dart';
 import 'guide_navigation.dart';
 import 'guide_content.dart';
+import '../tab_header.dart' show kSleepHeaderKey;
 import 'guide_target.dart';
 import 'guide_copy.dart';
 import 'guide_labels.dart';
@@ -33,7 +34,8 @@ Guide get alarmScheduleGuide => Guide(
             id: 'open-alarm',
             node: GuideNode.sleep,
             target: _alarmRow,
-            anchor: GuideTarget.firstLabel(ScreenLabel.sleepDetailNavTitle),
+            // Edge+: the tab has no title line; its header is the anchor.
+            anchor: GuideTarget.key(kSleepHeaderKey),
             action: GuideAction.scrollThenTap,
             caption: GuideCopy.alarmCaptionOpenAlarm,
           ),

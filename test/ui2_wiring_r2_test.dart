@@ -679,8 +679,9 @@ void main() {
                       unit: 'steps',
                       confidence: .9,
                       tier: MetricTier.high))));
-      expect(find.text('Recovery is not scored today'), findsOneWidget);
-      expect(find.text('See what was missing'), findsOneWidget);
+      // Edge+: the rings stay on screen, empty, and each is a door.
+      expect(find.byType(RingTrio), findsOneWidget);
+      expect(find.text('Not scored'), findsOneWidget);
     });
 
     testWidgets('the detail names each input and QUOTES the pipeline',
@@ -848,6 +849,10 @@ void main() {
         ));
 
     testWidgets('no model: the chip invites setting the coach up', (t) async {
+      // Edge+: Home is longer now; a tall view builds the chip.
+      t.view.physicalSize = const Size(390 * 3, 3200 * 3);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
       await t.pumpWidget(frame(false));
       expect(find.byIcon(LucideIcons.sparkles), findsOneWidget);
       expect(find.text('Set up the coach'),
@@ -858,6 +863,10 @@ void main() {
     });
 
     testWidgets('a configured coach: the chip asks it', (t) async {
+      // Edge+: Home is longer now; a tall view builds the chip.
+      t.view.physicalSize = const Size(390 * 3, 3200 * 3);
+      t.view.devicePixelRatio = 3;
+      addTearDown(t.view.reset);
       await t.pumpWidget(frame(true));
       expect(find.byIcon(LucideIcons.sparkles), findsOneWidget);
       expect(find.text('Ask the coach'), findsOneWidget);

@@ -88,8 +88,19 @@ void main() {
   });
 
   group('the check-in knows when it has already been answered', () {
+    test('Edge+: the morning answers alone do not count', () {
+      expect(
+          NotificationCenter.checkInDone({
+            'mood_morning': const JournalMetricValue(3),
+            'sleep_quality': const JournalMetricValue(4),
+          }),
+          isFalse);
+    });
+
     test('any rating counts, and one is enough', () {
-      for (final f in kJournalFields.where((f) => f.isRating)) {
+      // Edge+: the morning check-in's two answers leave the evening owed.
+      for (final f in kJournalFields.where((f) =>
+          f.isRating && f.key != 'mood_morning' && f.key != 'sleep_quality')) {
         expect(
             NotificationCenter.checkInDone({f.key: const JournalMetricValue(3)}),
             isTrue,

@@ -81,6 +81,7 @@ import 'day_timeline.dart' show DayTimelineScreen;
 import 'metric_detail.dart';
 import 'readiness_detail.dart';
 import 'sleep_detail.dart';
+import 'health_screen.dart' show HealthScreen;
 
 // ═══════════════════ shared plumbing ═══════════════════
 
@@ -212,6 +213,15 @@ bool syncingNowOf(BuildContext c) {
     return c.select<AppState, bool>((a) => a.syncingNow);
   } catch (_) {
     return false;
+  }
+}
+
+/// Edge+: the band's heart rate right now, or null (also in a golden).
+int? liveHrOf(BuildContext c) {
+  try {
+    return c.select<AppState, int?>((a) => a.liveHr);
+  } catch (_) {
+    return null;
   }
 }
 
@@ -1337,6 +1347,9 @@ class _RingState {
   /// reading, so it is not one.
   bool get measured => why == null && !calibrating;
 
+  /// Edge+: what is written inside the ring.
+  String get inner => kind == HomeRingKind.recovery ? '$value%' : value;
+
   Color arc(P p) => calibrating || provisional ? p.ink3 : p.on(color);
   Color ink(P p) => measured && !provisional ? p.on(color) : p.ink3;
 
@@ -1439,7 +1452,8 @@ _RingState _ringOf(HomeRingKind k, HomeData d, AppLocalizations? l) {
                   l?.homeSleepPctCompact(m.pct, _compactHm(m.targetMin, l)) ??
                       '${m.pct}% of ${_compactHm(m.targetMin, l)}',
                 ],
-          frac: m.sweep,
+          // Edge+: past 100 % the ring is simply full, not a spiral.
+          frac: m.sweep.clamp(0.0, 1.0),
           arcs: m.arcs,
           // Today's own night while the drain is still arriving: a real figure
           // that can still move, drawn greyed like the provisional recovery.
@@ -1485,6 +1499,10 @@ List<RingArc>? _stageArcs(_RingState r, P p) {
     return null;
   }
   final cols = Hypnogram.cols(p);
+  // Edge+: past 100 % the stage arcs are scaled to one full lap, so the ring
+  // closes cleanly instead of spiralling inwards.
+  final total = arcs.fold<double>(0, (a, e) => a + e.fraction);
+  final k = total > 1 ? 1 / total : 1.0;
   return [
     for (final a in arcs)
       RingArc(
@@ -1500,7 +1518,7 @@ List<RingArc>? _stageArcs(_RingState r, P p) {
                   SleepArcKind.light => SleepStage.light,
                   _ => SleepStage.awake,
                 }]!,
-          a.fraction),
+          a.fraction * k),
   ];
 }
 
@@ -1535,7 +1553,22 @@ class _Dial extends StatelessWidget {
                 solid: r.measured,
                 background: p.card),
       ),
-      Icon(r.icon, size: icon, color: r.ink(p)),
+      // Edge+: the number sits inside the ring; the icon only stands in
+      // while there is no number.
+      if (r.measured)
+        Padding(
+          padding: EdgeInsets.all(stroke + icon * .35),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              r.inner,
+              maxLines: 1,
+              style: F.n24.copyWith(color: r.provisional ? p.ink3 : p.ink),
+            ),
+          ),
+        )
+      else
+        Icon(r.icon, size: icon, color: r.ink(p)),
     ]);
   }
 }
@@ -1612,7 +1645,7 @@ class _CaptionSpec {
   factory _CaptionSpec.of(BuildContext c, Color color, TextAlign align,
       int? maxLines) {
     final d = DefaultTextStyle.of(c);
-    var st = d.style.merge(F.cap.copyWith(color: color));
+    var st = d.style.merge(kRingCaption.copyWith(color: color));
     if (MediaQuery.boldTextOf(c)) {
       st = st.merge(const TextStyle(fontWeight: FontWeight.bold));
     }
@@ -1650,6 +1683,9 @@ class _CaptionSpec {
       overflow: TextOverflow.clip);
 }
 
+/// Edge+: the ring captions use the ring heading's font, one size down.
+const kRingCaption = F.mini;
+
 class _RingText extends StatelessWidget {
   final _RingState r;
   final TextAlign align;
@@ -1666,15 +1702,14 @@ class _RingText extends StatelessWidget {
       Text(r.label.toUpperCase(),
           style: F.over.copyWith(color: p.ink3), textAlign: align),
         const SizedBox(height: S.x1),
-        // Absent reads as words, never as a dash and never as a zero, so it
-        // takes the sentence weight rather than the numeral one.
-        Text(
-          presentationText(AppLocalizations.of(c), r.value),
-          style: r.measured
-              ? F.n24.copyWith(color: r.provisional ? p.ink3 : p.ink)
-              : F.body.copyWith(color: p.ink2),
-          textAlign: align,
-        ),
+        // Edge+: the number is inside the ring. An absence is written here
+        // in the heading's font, a little smaller.
+        if (!r.measured)
+          Text(
+            presentationText(AppLocalizations.of(c), r.value),
+            style: kRingCaption.copyWith(color: p.ink2),
+            textAlign: align,
+          ),
         // No reserved caption lines: an empty caption takes no space, so the
         // card has no blank band under the rings.
         if (r.sub.isNotEmpty) const SizedBox(height: 2),
@@ -1792,6 +1827,11 @@ class HomeData {
   /// so; recovery is still withheld entirely until the night settles.
   final bool sleepProvisional;
 
+  /// Edge+: last night's breathing rate (per minute), HRV (ms) and skin
+  /// temperature away from usual (°C on WHOOP 5, else a relative z). Null
+  /// when the night is not today's or was not measured.
+  final double? respRate, hrvMs, skinDevC, skinZ;
+
   const HomeData({
     this.name,
     this.dayId,
@@ -1816,6 +1856,10 @@ class HomeData {
     this.readinessUpdate,
     this.sleepStages,
     this.sleepProvisional = false,
+    this.respRate,
+    this.hrvMs,
+    this.skinDevC,
+    this.skinZ,
   });
 
   /// The three illness fields, replaced together. Test-facing sugar, and they
@@ -1845,6 +1889,10 @@ class HomeData {
         absentDiag: absentDiag,
         recoveryState: recoveryState,
         readinessUpdate: readinessUpdate,
+        respRate: respRate,
+        hrvMs: hrvMs,
+        skinDevC: skinDevC,
+        skinZ: skinZ,
       );
 
   /// A day OTHER than today, for the Home day switcher.
@@ -1998,8 +2046,16 @@ class HomeData {
           ? (strain['strain_target'] as Map).cast<String, dynamic>()
           : null,
       insightsStale: staleReasonOf(cd),
+      // Edge+: the extra night vitals, only when the night is today's own.
+      respRate: heldOver != null ? null : _num(today['resp'], 'value'),
+      hrvMs: heldOver != null ? null : _num(today['hrv'], 'rmssd'),
+      skinDevC: heldOver != null ? null : _num(today['skin_temp'], 'dev_c'),
+      skinZ: heldOver != null ? null : _num(today['skin_temp'], 'value'),
     );
   }
+
+  static double? _num(Object? m, String k) =>
+      m is Map && m[k] is num ? (m[k] as num).toDouble() : null;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -2298,6 +2354,27 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     return null;
   }
 
+  /// Edge+: the greeting alone, centred at the very top.
+  Widget _greetingRow(BuildContext c, P p,
+      ({String word, IconData icon, Color color}) g, String? name) {
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x2, bottom: S.x3),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Flexible(
+          child: Text(
+            name == null || name.isEmpty ? g.word : '${g.word}, $name',
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: F.head.copyWith(color: p.ink),
+          ),
+        ),
+        const SizedBox(width: S.x2),
+        Icon(g.icon, size: 16, color: p.on(g.color)),
+      ]),
+    );
+  }
+
   Widget _bareStatusCard(BuildContext c, HomeData d, AppLocalizations? l,
       {required bool pastDay}) {
     // A PAST day with nothing on it is a settled fact, not a sync problem —
@@ -2355,17 +2432,12 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
 
     if (d == null) {
       return _refreshable(ListView(padding: pad, children: [
-        const SizedBox(height: S.x8),
-        // No day on screen ⇒ no `todayId`, so this renders the dated form.
-        // Shown here TOO: a first run, a failed read and a sync in flight are
-        // exactly when "how far are we?" is worth answering, and the header
-        // this line normally sits under does not exist on this path.
-        Align(alignment: Alignment.centerLeft, child: syncedThroughLine(c, null, l)),
-        // The battery reading lives on AppState.device, independent of
-        // HomeData — a load failure or first run must not hide it too.
-        if (batteryLine(c) case final battery?) ...[
-          const SizedBox(height: 2),
-          Align(alignment: Alignment.centerLeft, child: battery),
+        // Edge+: the same greeting and header as an ordinary day.
+        _greetingRow(c, p, g, null),
+        TabHeader(day: _day ?? todayLabel(), days: _days, onDay: _goDay),
+        // Edge+: the rings stay on screen even before anything is recorded.
+        if (!_loading) ...[
+          RingTrio(d: HomeData(dayId: _day ?? todayLabel())),
         ],
         const SizedBox(height: S.x3),
         const DetectedActivitiesCard(),
@@ -2464,6 +2536,21 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     // to start, that outranks anything else this screen has to say today.
     final rebuilt = dbRebuiltCard(dbRebuildOf(c), l);
 
+    // Recovery, strain and sleep, each a door into its own screen. Edge+:
+    // always drawn, empty rings included.
+    final rings = RingTrio(
+      d: d,
+      onOpen: (k) => go(
+          c,
+          switch (k) {
+            // A past day's rings open that day's screens.
+            HomeRingKind.recovery =>
+              ReadinessDetail(day: isToday ? null : _day),
+            HomeRingKind.strain => DayStrainDetail(day: isToday ? null : _day),
+            HomeRingKind.sleep => SleepDetail(day: isToday ? null : _day),
+          }),
+    );
+
     return _refreshable(ListView(padding: pad, children: [
       if (rebuilt != null) ...[const SizedBox(height: S.x3), rebuilt],
 
@@ -2477,52 +2564,16 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       // state on a morning whose own bundle has not derived yet, which is
       // exactly the morning you would most want to be told.
       ...?_bodyWatch(c, d, todayLabel(widget.now)),
-      // ── greeting ──
-      Padding(
-        padding: const EdgeInsets.only(top: S.x3, bottom: S.x5),
-        child: Row(children: [
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Flexible(
-                  child: Text(
-                    d.name == null || d.name!.isEmpty
-                        ? g.word
-                        : '${g.word}, ${d.name}',
-                    style: F.t2.copyWith(color: p.ink),
-                  ),
-                ),
-                const SizedBox(width: S.x2),
-                Icon(g.icon, size: 17, color: p.on(g.color)),
-              ]),
-              const SizedBox(height: 2),
-              Text(prettyDay(d.dayId, l), style: F.cap.copyWith(color: p.ink3)),
-              // How far the band's data reaches, always — the question "am I
-              // looking at today, or at last night?" used to be answerable
-              // only by opening Profile > Devices.
-              syncedThroughLine(c, d.dayId, l),
-              // Its own line, not squeezed into the sync line's row: at
-              // accessibility text sizes that row has no slack left, and
-              // `Expanded` would only shrink the sync text into extra wrapped
-              // lines to make room rather than ever actually overflow.
-              if (batteryLine(c) case final battery?) ...[
-                const SizedBox(height: 2),
-                battery,
-              ],
-            ]),
-          ),
-          const SizedBox(width: S.x3),
-          // The coach moved to its own chip under the plan, and Profile is the
-          // same avatar every tab carries.
-          const ProfileAvatar(accent: C.domHome),
-        ]),
-      ),
-
+      // ── greeting ── Edge+: only the greeting, centred.
+      _greetingRow(c, p, g, d.name),
+      // Edge+: band status · day · profile in one row.
+      TabHeader(day: _day ?? d.dayId, days: _days, onDay: _goDay),
+      // Edge+: Health lives under Home now.
+      healthDoor(c, d),
+      const SizedBox(height: S.x3),
       if (bare) ...[
         const DetectedActivitiesCard(),
       ],
-      ...dayNavRow(_day ?? d.dayId, _days, _goDay),
       // Stepped back through the record: one tap home.
       if (!isToday)
         Align(
@@ -2546,6 +2597,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         WearableCells(kHomeWearableRows, date: isToday ? null : _day),
 
       if (bare) ...[
+        // Edge+: the rings stay, empty, on a day with nothing recorded.
+        rings,
+        const SizedBox(height: S.x3),
         // A live workout holds derivation, so a bare day with a session open
         // is the hold at work, not a sync problem — see [workoutHoldCard].
         // Only for TODAY: a live workout right now says nothing about why a
@@ -2574,57 +2628,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         // diagnostic used to go nowhere but a Firebase breadcrumb. It belongs
         // one tap away, on the Readiness screen: a wall of per-input
         // diagnostics on Home makes the app read as broken.
-        if (RingTrio.has(d))
-          RingTrio(
-            d: d,
-            onOpen: (k) => go(
-                c,
-                switch (k) {
-                  // A past day's rings open that day's screens: the number
-                  // tapped and the number shown must be the same day's.
-                  HomeRingKind.recovery =>
-                    ReadinessDetail(day: isToday ? null : _day),
-                  HomeRingKind.strain =>
-                    DayStrainDetail(day: isToday ? null : _day),
-                  // The night the ring was drawn from, not last night. Today
-                  // stays null even after the switcher steps back onto it:
-                  // today's ring is the held-over night, and only the default
-                  // pick resolves to that one.
-                  HomeRingKind.sleep => SleepDetail(day: isToday ? null : _day),
-                }),
-          )
-        else
-          Builder(builder: (c) {
-            final need = needMessageFromNote(d.readiness.note);
-            // readinessInputShortfallNote/readinessUnstableBaselineNote off
-            // d.absentDiag are the SAME functions and the SAME stored
-            // diagnostic readiness_detail.dart's banner uses — not a second,
-            // independently-worded explanation — so this card and the detail
-            // screen can never say two different things about the same
-            // absence.
-            final shortfall = need == null
-                ? readinessInputShortfallNote(d.absentDiag) ??
-                    readinessUnstableBaselineNote(
-                        d.absentDiag?['note']?.toString())
-                : null;
-            return StatusCard(
-              l?.homeReadinessNotScoredTitle ?? 'Recovery is not scored today',
-              need != null
-                  ? (l?.homeReadinessNeedBody(need) ??
-                      '$need to know what normal looks like for you.')
-                  // Was "Needs a night of beat-to-beat data, plus your own
-                  // history to compare it to" — a cause, stated for every
-                  // absence the note convention did not cover. The door below
-                  // is what actually answers it.
-                  : shortfall ??
-                      whyFromNote(d.readiness.note) ??
-                      (l?.homeReadinessNoReason ?? 'No reason recorded.'),
-              fix: l?.homeSeeWhatWasMissing ?? 'See what was missing',
-              icon: LucideIcons.batteryCharging,
-              onFix: () =>
-                  go(c, ReadinessDetail(day: isToday ? null : _day)),
-            );
-          }),
+        rings,
 
         const SizedBox(height: S.x3),
         const DetectedActivitiesCard(),
@@ -2792,9 +2796,16 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     Widget detail(String key) =>
         isToday || _day == null ? MetricDetail(key) : metricDayScreen(key, _day!);
 
-    // Sleep is a RING now, duration and all — the card here was the same
-    // number twice on one screen, and the ring is the one that says what the
-    // duration was measured against.
+    // Edge+: the heart rate tile shows the CURRENT rate while the band
+    // streams one; the resting rate is the fallback.
+    final live = isToday ? liveHrOf(c) : null;
+    if (live != null) {
+      cards.add(SignalCard(LucideIcons.heart, C.red,
+          l?.homeHeartRate ?? 'Heart rate', '$live',
+          unit: 'bpm',
+          sub: 'Aktuell',
+          onTap: () => go(c, detail('resting_hr'))));
+    } else {
     add(
       d.rhr,
       () => SignalCard(LucideIcons.heart, C.red, l?.homeHeartRate ?? 'Heart rate',
@@ -2818,6 +2829,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
                   'Resting heart rate is read from sleep, and no sleep was recorded.')
               : ''),
     );
+    }
     // Steps keeps its tile whether or not a counter reported. Zero steps is a
     // real reading — an unmoved counter — and it renders as 0, not as absence.
     // When nothing counted at all the tile stays and says so in two words,
@@ -2854,6 +2866,34 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
               ),
             ),
     ));
+    // Edge+: breathing, skin temperature and HRV, same tiles, under the
+    // first row. All three are read from last night.
+    String signed(double v, int dp) =>
+        '${v >= 0 ? '+' : ''}${displayFixed(v, dp)}';
+    const none = '–';
+    cards.add(SignalCard(LucideIcons.wind, C.blue, 'Atmung',
+        d.respRate == null ? none : displayFixed(d.respRate!, 1),
+        unit: d.respRate == null ? '' : '/min',
+        sub: d.respRate == null ? 'Keine Daten' : 'Letzte Nacht',
+        onTap: () => go(c, detail('resp_rate'))));
+    cards.add(SignalCard(LucideIcons.thermometer, C.orange, 'Körpertemperatur',
+        d.skinDevC != null
+            ? signed(d.skinDevC!, 1)
+            : d.skinZ != null
+                ? signed(d.skinZ!, 1)
+                : none,
+        unit: d.skinDevC != null ? '°C' : '',
+        sub: d.skinDevC != null
+            ? 'vs. normal'
+            : d.skinZ != null
+                ? 'Abweichung (relativ)'
+                : 'Keine Daten',
+        onTap: () => go(c, detail('skin_temp'))));
+    cards.add(SignalCard(LucideIcons.activity, C.purple, 'HRV',
+        d.hrvMs == null ? none : '${d.hrvMs!.round()}',
+        unit: d.hrvMs == null ? '' : 'ms',
+        sub: d.hrvMs == null ? 'Keine Daten' : 'Letzte Nacht',
+        onTap: () => go(c, detail('hrv'))));
     add(
       d.calories,
       () => SignalCard(LucideIcons.flame, C.orange, l?.homeActiveEnergy ?? 'Active energy',
@@ -3100,6 +3140,43 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
 /// days give it a resting level, recovery once [readinessCompositeMinBaseline]
 /// earlier nights give it a normal range. Read from the analytics constants so
 /// the card cannot drift from the gate.
+/// Edge+: Health is no longer a tab. This long row under the header is the
+/// way in, with the illness watch's colour on its icon.
+Widget healthDoor(BuildContext c, HomeData d) {
+  final p = P.of(c);
+  final l = AppLocalizations.of(c);
+  final (Color col, String sub) = switch (d.illnessState) {
+    'red' => (C.red, 'Ruhepuls mehrere Nächte erhöht'),
+    'amber' => (C.orange, 'Letzte Nacht außerhalb deines Normalbereichs'),
+    'green' => (C.green, 'Alles in deinem Normalbereich'),
+    _ => (C.domHealth, 'Vitalwerte, Trends und Kopf'),
+  };
+  final title = l?.tabHealth ?? 'Health';
+  return Surface(
+    onTap: () => go(c, const HealthScreen(pushed: true)),
+    semanticLabel: '$title. $sub',
+    pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
+    child: Row(children: [
+      Container(
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: p.wash(col)),
+        child: Icon(LucideIcons.heartPulse, size: 18, color: p.on(col)),
+      ),
+      const SizedBox(width: S.x3),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+          Text(sub, style: F.cap.copyWith(color: p.ink3)),
+        ]),
+      ),
+      Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+    ]),
+  );
+}
+
 Widget firstWeekCard(BuildContext c,
     {required int days, required bool strainScored, int? recoveryNightsLeft}) {
   final p = P.of(c);

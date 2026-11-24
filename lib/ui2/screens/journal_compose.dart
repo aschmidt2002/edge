@@ -33,7 +33,13 @@ import 'custom_journal_field_sheet.dart';
 import 'metric_detail.dart' show detailScaffold;
 
 class JournalCompose extends StatefulWidget {
-  const JournalCompose({super.key, this.date});
+  const JournalCompose(
+      {super.key, this.date, this.evening = false, this.askSleep = true});
+
+  /// Edge+: opened by the evening check-in. Leaves out the morning's mood,
+  /// and sleep quality when the morning already asked it.
+  final bool evening;
+  final bool askSleep;
 
   /// The day being written. Defaults to today's LOCAL label — never a UTC one.
   final String? date;
@@ -335,7 +341,12 @@ class _JournalComposeState extends State<JournalCompose> {
                             child: Column(
                               children: [
                                 for (final s in _specs.where(
-                                  (s) => s.key != 'mood',
+                                  (s) =>
+                                      s.key != 'mood' &&
+                                      !(widget.evening &&
+                                          (s.key == 'mood_morning' ||
+                                              (s.key == 'sleep_quality' &&
+                                                  !widget.askSleep))),
                                 ))
                                   // MT-03 — weight is TYPED, not stepped. On a
                                   // 0.1 kg step a stepper is 700 taps from
@@ -464,9 +475,13 @@ class _JournalComposeState extends State<JournalCompose> {
 /// ten distinguishable states, and the extra resolution is noise a rank
 /// correlation then has to see through.
 class MoodPicker extends StatelessWidget {
-  const MoodPicker({super.key, this.value, required this.onChanged});
+  const MoodPicker(
+      {super.key, this.value, required this.onChanged, this.title});
 
   final int? value;
+
+  /// Edge+: another 1–5 question on the same faces (sleep quality).
+  final String? title;
 
   /// Null means "clear it". A mis-tap used to be permanent: every face wrote a
   /// mood and none of them could write absence back, so the only way out of a
@@ -493,13 +508,17 @@ class MoodPicker extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l?.journalComposeHowAreYouFeeling ?? 'How are you feeling?',
+            title ??
+                l?.journalComposeHowAreYouFeeling ??
+                'How are you feeling?',
             style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: S.x1),
           Text(
             value == null
                 ? (l?.journalComposeNotAnsweredYet ?? 'Not answered yet')
+                : title != null
+                ? '$value von 5'
                 : (l?.journalComposeMoodOfFive(value!) ??
                     'Mood $value of 5 · tap it again to clear'),
             style: F.cap.copyWith(color: p.ink3),

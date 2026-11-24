@@ -37,7 +37,8 @@ enum ShellDomain {
   String title(BuildContext c) {
     final l = AppLocalizations.of(c);
     return switch (this) {
-          ShellDomain.today => l?.tabToday,
+          // Edge+: the first tab is called Home in every language.
+          ShellDomain.today => 'Home',
           ShellDomain.sleep => l?.tabSleep,
           ShellDomain.activity => l?.tabActivity,
           ShellDomain.health => l?.tabHealth,
@@ -235,7 +236,9 @@ class _TabBar extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Edge+: Health opens from Home now, so it has no tab button.
               for (final d in ShellDomain.values)
+                if (d != ShellDomain.health)
                 Expanded(
                   child: _Tab(
                     domain: d,

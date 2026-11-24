@@ -199,12 +199,14 @@ void main() {
         l: ru,
       );
       for (var i = 0; i < kJournalFields.length; i++) {
+        // Edge+: the morning mood is a German-only label.
+        if (kJournalFields[i].key == 'mood_morning') continue;
         expect(notes[i].title, matches(RegExp('[А-Яа-яЁё]')));
       }
       expect(notes.last.title, 'Mood');
       expect(notes.first.title, 'Настроение');
-      expect(notes[1].title, 'Качество сна');
-      expect(notes[2].title, 'Энергия');
+      expect(notes[2].title, 'Качество сна');
+      expect(notes[3].title, 'Энергия');
       expect(
         ru.presentationWeightRepsLogged('20', localizedText(ru, 'kg'), 5),
         '20 кг × 5 — записано',

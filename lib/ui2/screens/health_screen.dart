@@ -487,7 +487,12 @@ class HealthScreen extends StatefulWidget {
       this.labs,
       this.explore,
       this.tab = 0,
-      this.now});
+      this.now,
+      this.pushed = false});
+
+  /// Edge+: opened from Home's Health row rather than as a tab. Gets its
+  /// own page and a back arrow.
+  final bool pushed;
 
   @override
   State<HealthScreen> createState() => _HealthScreenState();
@@ -664,9 +669,19 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
   Widget build(BuildContext c) {
     final d = _d ?? const HealthData();
     final l = AppLocalizations.of(c);
-    return ListView(padding: pad, children: [
-      ScreenTitle(l?.healthTitle ?? 'Health',
-          trailing: const ProfileAvatar(accent: C.domHealth)),
+    final list = ListView(padding: pad, children: [
+      if (widget.pushed)
+        Row(children: [
+          IconButton(
+            icon: const Icon(LucideIcons.chevronLeft),
+            tooltip: MaterialLocalizations.of(c).backButtonTooltip,
+            onPressed: () => Navigator.of(c).maybePop(),
+          ),
+          Expanded(child: ScreenTitle(l?.healthTitle ?? 'Health')),
+        ])
+      else
+        ScreenTitle(l?.healthTitle ?? 'Health',
+            trailing: const ProfileAvatar(accent: C.domHealth)),
       SubTabs(_tabsOf(l), _tab, _select, color: C.blue),
       const SizedBox(height: S.x5),
       if (_loading && _d == null)
@@ -684,6 +699,9 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
         },
       const HelpEntry(topic: GuideTopic.health),
     ]);
+    if (!widget.pushed) return list;
+    return Scaffold(
+        backgroundColor: P.of(c).bg, body: SafeArea(bottom: false, child: list));
   }
 
   // ─────────────── OVERVIEW ───────────────

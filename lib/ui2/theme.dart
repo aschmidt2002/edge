@@ -309,6 +309,15 @@ class F {
       fontWeight: FontWeight.w600,
       letterSpacing: .5);
 
+  /// Edge+: one step under [over] — ring captions and the band's battery.
+  static const mini = TextStyle(
+      fontFamily: _f,
+      fontFamilyFallback: _fb,
+      fontSize: 10,
+      height: 13 / 10,
+      fontWeight: FontWeight.w600,
+      letterSpacing: .3);
+
   // Numerals — a parallel display ramp. Tabular, so a live value never jitters
   // its own layout as digits change.
   static const n48 = TextStyle(

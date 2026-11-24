@@ -36,6 +36,7 @@ import 'ui2/screens/what_changed.dart';
 import 'ui2/screens/health_screen.dart';
 import 'ui2/screens/home_screen.dart';
 import 'ui2/screens/journal_compose.dart';
+import 'ui2/screens/journal_prompt.dart' show maybeShowCheckIn;
 import 'ui2/screens/log_workout.dart';
 import 'ui2/screens/detected_activities.dart';
 import 'ui2/screens/nutrition_screen.dart';
@@ -609,7 +610,16 @@ class _ShellState extends State<AppMainShell> implements GuideShellLink {
       // never saw one.
       _markOnboarded();
       _consume();
+      // Edge+: the morning / evening check-in, after any deep link landed.
+      Future<void>.delayed(const Duration(milliseconds: 800), _checkIn);
     });
+    _lifecycle = AppLifecycleListener(onResume: _checkIn);
+  }
+
+  AppLifecycleListener? _lifecycle;
+
+  void _checkIn() {
+    if (mounted) unawaited(maybeShowCheckIn(context));
   }
 
   NavigatorState? _relaunchNavigator() =>
@@ -686,6 +696,7 @@ class _ShellState extends State<AppMainShell> implements GuideShellLink {
     _app?.screenRequest.removeListener(_consumeSoon);
     ActivityRelaunch.stop(_relaunchNavigator);
     _selection.dispose();
+    _lifecycle?.dispose();
     super.dispose();
   }
 

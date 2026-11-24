@@ -71,7 +71,9 @@ final _rules = <_Rule>[
     // long a network round trip gets before the button gives up on it, and
     // `Timer` has no non-`Duration` constructor to dodge this the way
     // beats.dart's wall-clock math does.
-    allow: {_tokenFile, 'lib/ui2/screens/home_screen.dart'},
+    // Edge+: tab_header's 30 s tick re-reads the five-minute band status;
+    // a clock, not an animation.
+    allow: {_tokenFile, 'lib/ui2/screens/home_screen.dart', 'lib/ui2/tab_header.dart'},
   ),
   _Rule(
     'raw gesture detector',
@@ -192,6 +194,9 @@ void main() {
 /// this list fails the test above, so the choice has to be made rather than
 /// drifted into.
 const _notComponents = {
+  // Edge+: the tab header reads AppState (band link, battery) and pushes;
+  // Home and Sleep carry it on every golden that matters.
+  'TabHeader', 'BandStatusIcon',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and

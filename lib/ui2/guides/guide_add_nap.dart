@@ -12,6 +12,7 @@ import 'guide.dart';
 import 'guide_navigation.dart';
 import 'guide_copy.dart';
 import 'guide_labels.dart';
+import '../tab_header.dart' show kSleepHeaderKey;
 import 'guide_target.dart';
 
 final _napsButton = GuideTarget.label(ScreenLabel.sleepDetailEditNaps);
@@ -27,7 +28,8 @@ Guide get addNapGuide => Guide(
             id: 'open-naps',
             node: GuideNode.sleep,
             target: _napsButton,
-            anchor: GuideTarget.label(ScreenLabel.sleepDetailNavTitle),
+            // Edge+: the tab has no title line; its header is the anchor.
+            anchor: GuideTarget.key(kSleepHeaderKey),
             action: GuideAction.tap,
             caption: GuideCopy.addNapCaptionOpenNaps,
           ),

@@ -30,7 +30,6 @@ import '../../state/locale_controller.dart';
 import '../../state/prefs.dart';
 import '../../models/metric.dart';
 import '../profile/devices.dart' show DeviceFilter;
-import '../profile/profile.dart' show ProfileAvatar;
 import '../ui2.dart';
 import 'home_screen.dart';
 import 'investigate.dart';
@@ -506,8 +505,14 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(S.x4, S.x4, S.x4, S.x16),
         children: [
-          ScreenTitle(title,
-              trailing: const ProfileAvatar(accent: C.domSleep)),
+          // Edge+: band status · night · profile, the same header as Home.
+          TabHeader(
+            key: kSleepHeaderKey,
+            day: _day ?? (_d ?? _lastGood)?.day,
+            days: (_d ?? _lastGood)?.days ?? const [],
+            onDay: _goDay,
+            accent: C.domSleep,
+          ),
           if (sub.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: S.x1, bottom: S.x2),
@@ -523,6 +528,11 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       ),
     );
   }
+
+  /// The day stepper in the body — not on the tab, where [TabHeader] carries
+  /// it (Edge+).
+  List<Widget> _nav(String? day, List<String> days, ValueChanged<String> on) =>
+      widget.embedded ? const [] : dayNavRow(day, days, on);
 
   SleepData? _d;
 
@@ -723,7 +733,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       final nav = _d ?? _lastGood ?? d;
       final shown = _day ?? nav.latestDay ?? nav.day;
       return _frame(c, title, [
-        ...dayNavRow(shown, nav.days, _goDay),
+        ..._nav(shown, nav.days, _goDay),
         const SizedBox(height: S.x2),
         StatusCard(
           shown == null
@@ -753,7 +763,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       final rejected =
           (d.night['sleep_source'] as String?) == 'rejected' && rejectedDay != null;
       return _frame(c, title, [
-        ...dayNavRow(_day ?? d.day, d.days, _goDay),
+        ..._nav(_day ?? d.day, d.days, _goDay),
         const SizedBox(height: S.x2),
         // A day CAN be in `availableDays` and still hold no night — the band
         // was worn through the day and off overnight. Stepping onto one of
@@ -848,7 +858,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     // would rather than printing the raw yyyy-MM-dd key.
     return _frame(c, title,
         sub: d.days.length < 2 ? dayNavLabel(d.day, l).toUpperCase() : '', [
-      ...dayNavRow(_day ?? d.day, d.days, _goDay),
+      ..._nav(_day ?? d.day, d.days, _goDay),
 
       // ── 1 · THE ANSWER ──
       _answer(c, p, d, n),

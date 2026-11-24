@@ -359,7 +359,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Бег'), findsOneWidget);
-    for (final title in ['Сегодня', 'Сон', 'Активность', 'Здоровье']) {
+    // Edge+: the first tab is Home everywhere; Health opens from Home.
+    for (final title in ['Home', 'Сон', 'Активность']) {
       expect(find.text(title), findsOneWidget);
     }
     expect(tester.takeException(), isNull);

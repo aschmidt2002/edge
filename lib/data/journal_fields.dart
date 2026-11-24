@@ -125,6 +125,16 @@ const kJournalFields = <JournalFieldSpec>[
     max: 5,
     step: 1,
   ),
+  // Edge+: the morning check-in's mood. `mood` itself is the evening one,
+  // so the day carries both.
+  JournalFieldSpec(
+    key: 'mood_morning',
+    label: 'Stimmung morgens',
+    kind: JournalFieldKind.rating,
+    unit: '',
+    max: 5,
+    step: 1,
+  ),
   JournalFieldSpec(
     key: 'sleep_quality',
     label: 'Sleep quality',

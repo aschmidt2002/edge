@@ -723,6 +723,9 @@ class NotificationCenter {
   /// filled in mood and stopped has been asked.
   static bool checkInDone(Map<String, JournalMetricValue> todayMetrics) {
     for (final f in kJournalFields) {
+      // Edge+: the morning check-in answers these two; the evening is still
+      // owed.
+      if (f.key == 'mood_morning' || f.key == 'sleep_quality') continue;
       if (f.isRating && todayMetrics.containsKey(f.key)) return true;
     }
     return false;

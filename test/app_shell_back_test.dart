@@ -42,7 +42,9 @@ void main() {
   }
 
   Future<void> select(WidgetTester tester, ShellDomain domain) async {
-    await tester.tap(find.text(domain.label));
+    // Edge+: Today is labelled Home, and Health has no tab button.
+    await tester.tap(
+        find.text(domain == ShellDomain.today ? 'Home' : domain.label));
     await tester.pumpAndSettle();
   }
 
@@ -59,19 +61,19 @@ void main() {
   ) async {
     final selected = <ShellDomain>[];
     await mount(tester, onSelect: selected.add);
-    await select(tester, ShellDomain.health);
+    await select(tester, ShellDomain.nutrition);
     await select(tester, ShellDomain.activity);
 
     await back(tester);
-    expect(find.text('screen Health'), findsOneWidget);
+    expect(find.text('screen Nutrition'), findsOneWidget);
     expect(exited(), isFalse);
     await back(tester);
     expect(find.text('screen Today'), findsOneWidget);
     expect(exited(), isFalse);
     expect(selected, [
-      ShellDomain.health,
+      ShellDomain.nutrition,
       ShellDomain.activity,
-      ShellDomain.health,
+      ShellDomain.nutrition,
       ShellDomain.today,
     ], reason: 'Back must also update the tab persisted by the host');
 
@@ -84,9 +86,9 @@ void main() {
   ) async {
     final selected = <ShellDomain>[];
     await mount(tester, onSelect: selected.add);
-    await select(tester, ShellDomain.health);
-    await select(tester, ShellDomain.health);
-    expect(selected, [ShellDomain.health, ShellDomain.health]);
+    await select(tester, ShellDomain.nutrition);
+    await select(tester, ShellDomain.nutrition);
+    expect(selected, [ShellDomain.nutrition, ShellDomain.nutrition]);
 
     await back(tester);
     expect(find.text('screen Today'), findsOneWidget);
@@ -100,11 +102,11 @@ void main() {
   ) async {
     await mount(tester);
     for (var i = 0; i < 5; i++) {
-      await select(tester, ShellDomain.health);
+      await select(tester, ShellDomain.nutrition);
       await select(tester, ShellDomain.activity);
     }
     await back(tester);
-    expect(find.text('screen Health'), findsOneWidget);
+    expect(find.text('screen Nutrition'), findsOneWidget);
     await back(tester);
     expect(find.text('screen Today'), findsOneWidget);
     expect(exited(), isFalse);
@@ -116,11 +118,11 @@ void main() {
     tester,
   ) async {
     await mount(tester);
-    await select(tester, ShellDomain.health);
+    await select(tester, ShellDomain.nutrition);
     await select(tester, ShellDomain.today);
     await select(tester, ShellDomain.activity);
     await back(tester);
-    expect(find.text('screen Health'), findsOneWidget);
+    expect(find.text('screen Nutrition'), findsOneWidget);
     await back(tester);
     expect(find.text('screen Today'), findsOneWidget);
     expect(exited(), isFalse);
@@ -132,10 +134,10 @@ void main() {
     tester,
   ) async {
     await mount(tester);
-    await select(tester, ShellDomain.health);
+    await select(tester, ShellDomain.nutrition);
     await select(tester, ShellDomain.today);
     await back(tester);
-    expect(find.text('screen Health'), findsOneWidget);
+    expect(find.text('screen Nutrition'), findsOneWidget);
     await back(tester);
     expect(find.text('screen Today'), findsOneWidget);
     expect(exited(), isFalse);
@@ -160,8 +162,8 @@ void main() {
     tester,
   ) async {
     await mount(tester);
-    await select(tester, ShellDomain.health);
-    final context = tester.element(find.text('screen Health'));
+    await select(tester, ShellDomain.nutrition);
+    final context = tester.element(find.text('screen Nutrition'));
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const Scaffold(body: Text('detail screen')),
@@ -171,7 +173,7 @@ void main() {
 
     await back(tester);
     expect(find.text('detail screen'), findsNothing);
-    expect(find.text('screen Health'), findsOneWidget);
+    expect(find.text('screen Nutrition'), findsOneWidget);
     expect(exited(), isFalse);
     await back(tester);
     expect(find.text('screen Today'), findsOneWidget);
@@ -179,16 +181,16 @@ void main() {
 
   testWidgets('a dialog closes before tab history is consumed', (tester) async {
     await mount(tester);
-    await select(tester, ShellDomain.health);
+    await select(tester, ShellDomain.nutrition);
     showDialog<void>(
-      context: tester.element(find.text('screen Health')),
+      context: tester.element(find.text('screen Nutrition')),
       builder: (_) => const AlertDialog(content: Text('dialog')),
     );
     await tester.pumpAndSettle();
 
     await back(tester);
     expect(find.text('dialog'), findsNothing);
-    expect(find.text('screen Health'), findsOneWidget);
+    expect(find.text('screen Nutrition'), findsOneWidget);
     expect(exited(), isFalse);
     await back(tester);
     expect(find.text('screen Today'), findsOneWidget);
@@ -200,7 +202,7 @@ void main() {
     await mount(tester);
     await tester.tap(find.text('increment Today'));
     await tester.pump();
-    await select(tester, ShellDomain.health);
+    await select(tester, ShellDomain.nutrition);
     await back(tester);
     expect(find.text('Today count 1'), findsOneWidget);
   });
@@ -272,7 +274,7 @@ void main() {
     expect(notified, [ShellDomain.activity]);
 
     // The old notifier must no longer drive the shell.
-    first.value = ShellDomain.health;
+    first.value = ShellDomain.nutrition;
     await tester.pumpAndSettle();
     expect(find.text('screen Activity'), findsOneWidget);
 
