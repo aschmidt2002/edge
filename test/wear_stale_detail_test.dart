@@ -65,7 +65,7 @@ Future<void> _vitals(WidgetTester t, Map<String, dynamic> wear) async {
   for (var i = 0; i < 20; i++) {
     await t.pump();
   }
-  await t.tap(find.text('Vitals'));
+  await t.tap(find.text('Trends'));
   for (var i = 0; i < 20; i++) {
     await t.pump();
   }
