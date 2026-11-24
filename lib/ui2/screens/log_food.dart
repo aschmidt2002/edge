@@ -326,7 +326,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     } catch (e) {
       debugPrint('food photo: picker failed: $e');
       if (mounted) {
-        setState(() => _photoError = trDe(context,
+        setState(() => _photoError = tr(context,
             'Kamera oder Galerie konnte nicht geöffnet werden.',
             'Could not open the camera or gallery.'));
       }
@@ -372,7 +372,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
       setState(() {
         _estimating = false;
         if (est.label.isEmpty) {
-          _photoError = trDe(context, 'Auf dem Foto ist kein Essen zu erkennen.',
+          _photoError = tr(context, 'Auf dem Foto ist kein Essen zu erkennen.',
               'No food could be recognised in the photo.');
           return;
         }
@@ -421,8 +421,8 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
       out.addAll([
         const SizedBox(height: S.x3),
         StatusCard(
-          trDe(c, 'Claude schaut sich das Foto an', 'Claude is looking at the photo'),
-          trDe(c, 'Das dauert meist 10 bis 30 Sekunden.',
+          tr(c, 'Claude schaut sich das Foto an', 'Claude is looking at the photo'),
+          tr(c, 'Das dauert meist 10 bis 30 Sekunden.',
               'This usually takes 10 to 30 seconds.'),
           icon: LucideIcons.camera,
           leading: const SizedBox(
@@ -436,21 +436,21 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
     if (_photoError != null) {
       out.addAll([
         const SizedBox(height: S.x3),
-        StatusCard(trDe(c, 'Keine Schätzung', 'No estimate'), _photoError!,
+        StatusCard(tr(c, 'Keine Schätzung', 'No estimate'), _photoError!,
             icon: LucideIcons.triangleAlert),
       ]);
     }
     if (est == null) return out;
     final conf = switch (est.confidence) {
-      'high' => trDe(c, 'ziemlich sicher', 'fairly sure'),
-      'medium' => trDe(c, 'mittel sicher', 'somewhat sure'),
-      _ => trDe(c, 'grobe Schätzung', 'rough guess'),
+      'high' => tr(c, 'ziemlich sicher', 'fairly sure'),
+      'medium' => tr(c, 'mittel sicher', 'somewhat sure'),
+      _ => tr(c, 'grobe Schätzung', 'rough guess'),
     };
     final portion = est.portionG == null ? '' : ' · ~${_plain(est.portionG)} g';
     out.addAll([
       const SizedBox(height: S.x3),
       Text(
-        '${trDe(c, 'Claude-Schätzung', 'Claude estimate')} ($conf)$portion'
+        '${tr(c, 'Claude-Schätzung', 'Claude estimate')} ($conf)$portion'
         '${est.note.isEmpty ? '' : '. ${est.note}'}',
         style: F.cap.copyWith(color: p.ink3, height: 1.45),
       ),
@@ -464,7 +464,7 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
         ]);
       }
       out.add(BigButton(
-        trDe(c, 'Mit Antworten neu schätzen', 'Re-estimate with answers'),
+        tr(c, 'Mit Antworten neu schätzen', 'Re-estimate with answers'),
         icon: LucideIcons.refreshCw,
         color: C.domFood,
         soft: true,
@@ -733,8 +733,8 @@ class _LogFoodSheetState extends State<LogFoodSheet> {
               child: SetRow(
                 LucideIcons.camera,
                 C.domFood,
-                trDe(c, 'Foto vom Essen', 'Photo of the meal'),
-                sub: trDe(c, 'Claude schätzt die Nährwerte',
+                tr(c, 'Foto vom Essen', 'Photo of the meal'),
+                sub: tr(c, 'Claude schätzt die Nährwerte',
                     'Claude estimates the nutrition'),
                 chevron: false,
                 onTap: _estimating ? null : _takePhoto,
@@ -1153,7 +1153,7 @@ class FoodRow extends StatelessWidget {
               switch (entry.source) {
                 FoodSource.barcode =>
                   l?.logFoodPillOpenFoodFacts ?? 'Open Food Facts',
-                FoodSource.photo => trDe(c, 'Foto', 'Photo'),
+                FoodSource.photo => tr(c, 'Foto', 'Photo'),
                 _ => l?.logFoodPillYours ?? 'Yours',
               },
       C.n400,
@@ -1266,12 +1266,12 @@ Future<ImageSource?> _askPhotoSource(BuildContext c) =>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              BigButton(trDe(s, 'Foto aufnehmen', 'Take a photo'),
+              BigButton(tr(s, 'Foto aufnehmen', 'Take a photo'),
                   icon: LucideIcons.camera,
                   color: C.domFood,
                   onTap: () => Navigator.of(s).pop(ImageSource.camera)),
               const SizedBox(height: S.x3),
-              BigButton(trDe(s, 'Aus der Galerie', 'From the gallery'),
+              BigButton(tr(s, 'Aus der Galerie', 'From the gallery'),
                   icon: LucideIcons.image,
                   color: C.domFood,
                   soft: true,

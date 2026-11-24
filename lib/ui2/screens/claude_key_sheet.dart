@@ -8,10 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../ai/food_photo.dart';
 import '../ui2.dart';
 
-/// German when the app is in German, English otherwise.
-String trDe(BuildContext c, String de, String en) =>
-    Localizations.localeOf(c).languageCode == 'de' ? de : en;
-
 /// Resolves true when a key was saved (or removed).
 Future<bool?> editClaudeKey(BuildContext c) async {
   final current = await ClaudeKey.read();
@@ -52,7 +48,7 @@ class _ClaudeKeySheetState extends State<_ClaudeKeySheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(trDe(context, 'Konnte nicht gespeichert werden.',
+          content: Text(tr(context, 'Konnte nicht gespeichert werden.',
               'Could not be saved.'))));
       return;
     }
@@ -71,11 +67,11 @@ class _ClaudeKeySheetState extends State<_ClaudeKeySheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(trDe(c, 'Claude-API-Key', 'Claude API key'),
+              Text(tr(c, 'Claude-API-Key', 'Claude API key'),
                   style: F.t2.copyWith(color: p.ink)),
               const SizedBox(height: S.x3),
               Text(
-                trDe(
+                tr(
                     c,
                     'Für die Nährwert-Schätzung aus Essensfotos. Das Foto wird '
                         'nur mit deinem eigenen Key an Anthropic geschickt. Der '
@@ -97,7 +93,7 @@ class _ClaudeKeySheetState extends State<_ClaudeKeySheet> {
                 style: F.body.copyWith(color: p.ink),
                 decoration: InputDecoration(
                   hintText: widget.hasKey
-                      ? trDe(c, 'Gespeichert. Neuen Key eingeben zum Ersetzen',
+                      ? tr(c, 'Gespeichert. Neuen Key eingeben zum Ersetzen',
                           'Saved. Type a new key to replace it')
                       : 'sk-ant-…',
                   hintStyle: F.body.copyWith(color: p.ink3),
@@ -118,14 +114,14 @@ class _ClaudeKeySheetState extends State<_ClaudeKeySheet> {
                     Uri.parse('https://console.anthropic.com/settings/keys'),
                     mode: LaunchMode.externalApplication),
                 child: Text(
-                  trDe(c, 'Key erstellen auf console.anthropic.com',
+                  tr(c, 'Key erstellen auf console.anthropic.com',
                       'Create a key at console.anthropic.com'),
                   style: F.cap.copyWith(
                       color: p.ink2, decoration: TextDecoration.underline),
                 ),
               ),
               const SizedBox(height: S.x5),
-              BigButton(trDe(c, 'Speichern', 'Save'),
+              BigButton(tr(c, 'Speichern', 'Save'),
                   color: C.domFood,
                   onTap: () {
                     if (_key.text.trim().isEmpty) {
@@ -136,7 +132,7 @@ class _ClaudeKeySheetState extends State<_ClaudeKeySheet> {
                   }),
               if (widget.hasKey) ...[
                 const SizedBox(height: S.x3),
-                BigButton(trDe(c, 'Key entfernen', 'Remove key'),
+                BigButton(tr(c, 'Key entfernen', 'Remove key'),
                     color: C.red, soft: true, onTap: () => _save('')),
               ],
             ],

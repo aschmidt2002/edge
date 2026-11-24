@@ -666,7 +666,7 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
             onAction: _editTargets,
           ),
         Section(
-          'Zielgewicht',
+          tr(c, 'Zielgewicht', 'Target weight'),
           WeightGoalSection(
             profile: _profile,
             forecast: weightBalance(
@@ -688,8 +688,8 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
           child: SetRow(
             LucideIcons.camera,
             C.domFood,
-            trDe(c, 'Claude für Essensfotos', 'Claude for meal photos'),
-            sub: trDe(c, 'Eigener API-Key', 'Your own API key'),
+            tr(c, 'Claude für Essensfotos', 'Claude for meal photos'),
+            sub: tr(c, 'Eigener API-Key', 'Your own API key'),
             onTap: () => editClaudeKey(c),
           ),
         ),

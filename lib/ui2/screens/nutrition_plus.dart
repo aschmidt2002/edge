@@ -108,14 +108,24 @@ double? balanceNeededBy({
   return (target - current) * kKcalPerKg / days;
 }
 
-const _months = [
+const _monthsDe = [
   'Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni',
   'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.',
 ];
-String _date(DateTime d) => '${d.day}. ${_months[d.month - 1]} ${d.year}';
-String _kg(double v) => '${v.toStringAsFixed(1).replaceAll('.', ',')} kg';
-String _kcal(double v) =>
-    '${v >= 0 ? '+' : '−'}${v.abs().round()} kcal/Tag';
+const _monthsEn = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+bool _de(BuildContext c) => Localizations.localeOf(c).languageCode == 'de';
+String _date(BuildContext c, DateTime d) => _de(c)
+    ? '${d.day}. ${_monthsDe[d.month - 1]} ${d.year}'
+    : '${_monthsEn[d.month - 1]} ${d.day}, ${d.year}';
+String _kg(BuildContext c, double v) {
+  final s = v.toStringAsFixed(1);
+  return '${_de(c) ? s.replaceAll('.', ',') : s} kg';
+}
+String _kcal(BuildContext c, double v) =>
+    '${v >= 0 ? '+' : '−'}${v.abs().round()} ${tr(c, 'kcal/Tag', 'kcal/day')}';
 
 // ══════════════════ WEIGHT GOAL: UI ══════════════════
 
@@ -142,19 +152,24 @@ class WeightGoalSection extends StatelessWidget {
     final wish = DateTime.tryParse(profile['weight_target_date'] as String? ?? '');
     if (target == null) {
       return StatusCard(
-        'Kein Zielgewicht',
-        'Gib dein Wunschgewicht ein. Edge+ rechnet aus deinem Grundumsatz, '
-            'deiner Aktivität und dem, was du isst, aus, wann du es erreichst.',
-        fix: 'Zielgewicht setzen',
+        tr(c, 'Kein Zielgewicht', 'No target weight'),
+        tr(
+            c,
+            'Gib dein Wunschgewicht ein. Edge+ rechnet aus deinem Grundumsatz, '
+                'deiner Aktivität und dem, was du isst, aus, wann du es erreichst.',
+            'Enter the weight you want. Edge+ works out from your resting '
+                'burn, your activity and what you eat when you will get there.'),
+        fix: tr(c, 'Zielgewicht setzen', 'Set target weight'),
         icon: LucideIcons.scale,
         onFix: onEdit,
       );
     }
     if (current == null) {
       return StatusCard(
-        'Aktuelles Gewicht fehlt',
-        'Ohne dein aktuelles Gewicht gibt es keine Prognose.',
-        fix: 'Gewicht eintragen',
+        tr(c, 'Aktuelles Gewicht fehlt', 'Current weight missing'),
+        tr(c, 'Ohne dein aktuelles Gewicht gibt es keine Prognose.',
+            'Without your current weight there is no forecast.'),
+        fix: tr(c, 'Gewicht eintragen', 'Enter weight'),
         icon: LucideIcons.scale,
         onFix: onEdit,
       );
@@ -167,13 +182,14 @@ class WeightGoalSection extends StatelessWidget {
             current: current, target: target, balance: f.balance, today: today);
     final String rate;
     if ((target - current).abs() < 0.05) {
-      rate = 'Ziel erreicht';
+      rate = tr(c, 'Ziel erreicht', 'Target reached');
     } else if (f == null) {
-      rate = 'Noch keine Prognose möglich';
+      rate = tr(c, 'Noch keine Prognose möglich', 'No forecast yet');
     } else if (reach == null) {
-      rate = 'Mit deinem aktuellen Verhalten nicht in Sicht';
+      rate = tr(c, 'Mit deinem aktuellen Verhalten nicht in Sicht',
+          'Not in sight at your current pace');
     } else {
-      rate = 'Prognose: ${_date(reach)}';
+      rate = '${tr(c, 'Prognose', 'Forecast')}: ${_date(c, reach)}';
     }
     final total = (start ?? current) - target;
     final frac = total.abs() < 0.05
@@ -186,26 +202,40 @@ class WeightGoalSection extends StatelessWidget {
             current: current, target: target, today: today, by: wish);
     final lines = <String>[
       if (f == null)
-        'Für eine Prognose brauche ich entweder vollständig geloggte Tage '
-            '(Essen + Band ganztägig getragen) oder ein Tagesenergie-Ziel '
-            'oben bei "Deine Ziele".'
+        tr(
+            c,
+            'Für eine Prognose brauche ich entweder vollständig geloggte Tage '
+                '(Essen + Band ganztägig getragen) oder ein Tagesenergie-Ziel '
+                'oben bei "Deine Ziele".',
+            'A forecast needs either fully logged days (food logged and the '
+                'band worn all day) or a daily energy goal under "Your goals" above.')
       else
-        'Bilanz: ${_kcal(f.balance)}, ${f.source == BalanceSource.logged ? 'gegessen minus verbraucht' : 'dein Kalorienziel minus Verbrauch'} '
-            '(Ø ${f.days} ${f.days == 1 ? 'Tag' : 'Tage'}). Verbrauch = Grundumsatz + Aktivität vom Band.',
+        tr(
+            c,
+            'Bilanz: ${_kcal(c, f.balance)}, ${f.source == BalanceSource.logged ? 'gegessen minus verbraucht' : 'dein Kalorienziel minus Verbrauch'} '
+                '(Ø ${f.days} ${f.days == 1 ? 'Tag' : 'Tage'}). Verbrauch = Grundumsatz + Aktivität vom Band.',
+            'Balance: ${_kcal(c, f.balance)}, ${f.source == BalanceSource.logged ? 'eaten minus burned' : 'your calorie goal minus burn'} '
+                '(avg of ${f.days} ${f.days == 1 ? 'day' : 'days'}). Burn = resting burn + activity from the band.'),
       if (wish != null)
         needed == null
-            ? 'Dein Wunschdatum (${_date(wish)}) ist schon vorbei.'
-            : 'Für dein Wunschdatum ${_date(wish)} bräuchtest du ${_kcal(needed)}'
-                '${f == null ? '' : ' (${reach != null && !reach.isAfter(wish) ? 'du liegst im Plan' : 'aktuell ${_kcal(f.balance)}'})'}.',
-      'Faustregel: 7.700 kcal ≈ 1 kg. Eine Schätzung, keine Garantie.',
+            ? tr(c, 'Dein Wunschdatum (${_date(c, wish)}) ist schon vorbei.',
+                'Your target date (${_date(c, wish)}) has already passed.')
+            : tr(
+                c,
+                'Für dein Wunschdatum ${_date(c, wish)} bräuchtest du ${_kcal(c, needed)}'
+                    '${f == null ? '' : ' (${reach != null && !reach.isAfter(wish) ? 'du liegst im Plan' : 'aktuell ${_kcal(c, f.balance)}'})'}.',
+                'To make your target date ${_date(c, wish)} you would need ${_kcal(c, needed)}'
+                    '${f == null ? '' : ' (${reach != null && !reach.isAfter(wish) ? 'you are on track' : 'now ${_kcal(c, f.balance)}'})'}.'),
+      tr(c, 'Faustregel: 7.700 kcal ≈ 1 kg. Eine Schätzung, keine Garantie.',
+          'Rule of thumb: 7,700 kcal ≈ 1 kg. An estimate, not a promise.'),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         GoalTrajectory(
-          'Zielgewicht',
-          _kg(current),
-          _kg(target),
+          tr(c, 'Zielgewicht', 'Target weight'),
+          _kg(c, current),
+          _kg(c, target),
           rate,
           frac,
           C.teal,
@@ -258,24 +288,25 @@ Future<bool> editWeightGoal(BuildContext context) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Zielgewicht', style: F.head.copyWith(color: p.ink)),
+            Text(tr(s, 'Zielgewicht', 'Target weight'),
+                style: F.head.copyWith(color: p.ink)),
             const SizedBox(height: S.x4),
             OsTextField(
               controller: currentCtl,
-              label: 'Aktuelles Gewicht (kg)',
-              hint: 'z. B. 82,5',
+              label: tr(s, 'Aktuelles Gewicht (kg)', 'Current weight (kg)'),
+              hint: tr(s, 'z. B. 82,5', 'e.g. 82.5'),
               keyboard: const TextInputType.numberWithOptions(decimal: true),
             ),
             const SizedBox(height: S.x3),
             OsTextField(
               controller: targetCtl,
-              label: 'Wunschgewicht (kg)',
-              hint: 'leer = kein Ziel',
+              label: tr(s, 'Wunschgewicht (kg)', 'Target weight (kg)'),
+              hint: tr(s, 'leer = kein Ziel', 'empty = no target'),
               keyboard: const TextInputType.numberWithOptions(decimal: true),
             ),
             const SizedBox(height: S.x3),
             Pressable(
-              semanticLabel: 'Wunschdatum wählen',
+              semanticLabel: tr(s, 'Wunschdatum wählen', 'Pick a target date'),
               onTap: () async {
                 final now = DateTime.now();
                 final picked = await showDatePicker(
@@ -295,14 +326,14 @@ Future<bool> editWeightGoal(BuildContext context) async {
                   Expanded(
                     child: Text(
                       wish == null
-                          ? 'Wunschdatum (optional)'
-                          : 'Wunschdatum: ${_date(wish!)}',
+                          ? tr(s, 'Wunschdatum (optional)', 'Target date (optional)')
+                          : '${tr(s, 'Wunschdatum', 'Target date')}: ${_date(s, wish!)}',
                       style: F.body.copyWith(color: p.ink),
                     ),
                   ),
                   if (wish != null)
                     Pressable(
-                      semanticLabel: 'Wunschdatum entfernen',
+                      semanticLabel: tr(s, 'Wunschdatum entfernen', 'Remove target date'),
                       onTap: () => set(() => wish = null),
                       child: Icon(LucideIcons.x, size: 18, color: p.ink3),
                     ),
@@ -310,7 +341,7 @@ Future<bool> editWeightGoal(BuildContext context) async {
               ),
             ),
             const SizedBox(height: S.x5),
-            BigButton('Speichern',
+            BigButton(tr(s, 'Speichern', 'Save'),
                 color: C.teal, onTap: () => Navigator.of(s).pop(true)),
           ],
         ),
@@ -324,9 +355,9 @@ Future<bool> editWeightGoal(BuildContext context) async {
   if (saved != true || !context.mounted) return false;
   final bad = [
     if (current.bad || (current.value != null && !plausibleWeightKg(current.value!)))
-      'Aktuelles Gewicht',
+      tr(context, 'Aktuelles Gewicht', 'Current weight'),
     if (target.bad || (target.value != null && !plausibleWeightKg(target.value!)))
-      'Wunschgewicht',
+      tr(context, 'Wunschgewicht', 'Target weight'),
   ];
   if (bad.isNotEmpty) {
     sayUnreadable(context, bad);
@@ -377,8 +408,9 @@ Future<void> armCreatineReminder({
     await svc.scheduleDaily(
       id: kCreatineReminderId,
       category: NotifCategory.reminders,
-      title: 'Creatin',
-      body: 'Du hast heute noch kein Creatin abgehakt.',
+      title: await trNow('Creatin', 'Creatine'),
+      body: await trNow('Du hast heute noch kein Creatin abgehakt.',
+          'You have not ticked off creatine today.'),
       hour: 22,
       minute: 0,
       route: kRouteWater,
@@ -414,16 +446,21 @@ class CreatineRow extends StatelessWidget {
     final p = P.of(c);
     return Pressable(
       onTap: onTap,
-      semanticLabel: taken ? 'Creatin genommen' : 'Creatin abhaken',
+      semanticLabel: taken
+          ? tr(c, 'Creatin genommen', 'Creatine taken')
+          : tr(c, 'Creatin abhaken', 'Tick off creatine'),
       child: Surface(
         child: Row(children: [
           Icon(LucideIcons.pill, size: 18, color: p.on(C.purple)),
           const SizedBox(width: S.x3),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Creatin', style: F.body.copyWith(color: p.ink)),
+              Text(tr(c, 'Creatin', 'Creatine'), style: F.body.copyWith(color: p.ink)),
               Text(
-                taken ? 'Heute genommen' : 'Erinnerung um 22 Uhr, falls offen',
+                taken
+                    ? tr(c, 'Heute genommen', 'Taken today')
+                    : tr(c, 'Erinnerung um 22 Uhr, falls offen',
+                        'Reminder at 10 pm if still open'),
                 style: F.over.copyWith(color: p.ink3),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
