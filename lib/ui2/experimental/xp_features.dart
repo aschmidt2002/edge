@@ -305,65 +305,6 @@ Future<List<Widget>> loadSleepPlanner(
         BuildContext c, LocalRepository repo, VoidCallback reload) async =>
     [const SizedBox(height: S.x3), const SleepPlannerCard()];
 
-// ═══ 2 · Tagesrückblick ══════════════════════════════════════════════════════
-
-Future<List<Widget>> loadDayReview(
-    BuildContext c, LocalRepository repo, VoidCallback reload) async {
-  final t = await _Today.load(repo);
-  final now = DateTime.now();
-  final midnight = DateTime(now.year, now.month, now.day);
-  final sessions = await repo.getSessions(
-      from: midnight.millisecondsSinceEpoch ~/ 1000);
-  final journal = await repo.getJournal(range: '1d');
-  final todayTags = [
-    for (final j in journal)
-      if (j['date'] == todayLabel()) ...(j['tags'] as List? ?? const []),
-  ];
-  final tst = await xpSeries(repo, 'sleep', days: 2);
-  if (!c.mounted) return const [];
-  final lines = <String>[
-    if (t.strain != null)
-      tr(c, 'Strain ${_n(t.strain, 1)}', 'Strain ${_n(t.strain, 1)}') +
-          (t.targetHi != null
-              ? (t.strain! > t.targetHi!
-                  ? tr(c, ', über deinem Ziel', ', above your target')
-                  : t.strain! >= (t.targetLo ?? 0)
-                      ? tr(c, ', im Zielbereich', ', inside your target')
-                      : tr(c, ', unter deinem Ziel', ', below your target'))
-              : ''),
-    if (sessions.isNotEmpty)
-      tr(c, '${sessions.length} Training(s): ', '${sessions.length} workout(s): ') +
-          sessions.map((s) => '${s['name'] ?? s['type'] ?? ''}').join(', '),
-    if (todayTags.isNotEmpty)
-      tr(c, 'Journal: ${todayTags.join(', ')}', 'Journal: ${todayTags.join(', ')}'),
-  ];
-  return [
-    xpStat(c, tr(c, 'Recovery heute', 'Recovery today'),
-        t.recovery == null ? '—' : '${t.recovery!.round()} %',
-        color: C.green),
-    Row(children: [
-      Expanded(child: xpStat(c, 'Strain', _n(t.strain, 1), color: C.blue)),
-      const SizedBox(width: S.x3),
-      Expanded(child: xpStat(c, tr(c, 'Schritte', 'Steps'), _n(t.steps), color: C.teal)),
-    ]),
-    Row(children: [
-      Expanded(
-          child: xpStat(c, tr(c, 'Aktive Energie', 'Active energy'),
-              t.kcal == null ? '—' : '${t.kcal!.round()} kcal',
-              color: C.orange)),
-      const SizedBox(width: S.x3),
-      Expanded(
-          child: xpStat(c, tr(c, 'Schlaf', 'Sleep'),
-              tst.isEmpty ? '—' : hmText(tst.last.$2),
-              color: C.indigo)),
-    ]),
-    xpSection(tr(c, 'Dein Tag', 'Your day'), [
-      if (lines.isEmpty) xpNote(c, tr(c, 'Noch nichts aufgezeichnet.', 'Nothing recorded yet.')),
-      for (final l in lines) xpNote(c, '• $l'),
-    ]),
-  ];
-}
-
 // ═══ 3 · Trainingsempfehlung ═════════════════════════════════════════════════
 
 Future<List<Widget>> loadTrainingAdvice(
@@ -487,32 +428,45 @@ Future<List<Widget>> loadSleepStress(
 
 // ═══ 5 · Stress jetzt ════════════════════════════════════════════════════════
 
-Future<List<Widget>> loadStressNow(
-    BuildContext c, LocalRepository repo, VoidCallback reload) async {
+/// Today's beats in 15-minute windows with their stress, against last
+/// night's resting HR and HRV. Null while there is no such reference.
+Future<({List<BeatWindow> wins, List<double> s})?> xpStressToday(
+    LocalRepository repo) async {
   final t = await _Today.load(repo);
+  final refR = t.hrvBase ?? t.rmssd;
+  final refH = t.rhr;
+  if (refR == null || refH == null) return null;
   final now = DateTime.now();
   final wins = await beatWindows(
       DateTime(now.year, now.month, now.day), now,
       window: const Duration(minutes: 15));
+  return (
+    wins: wins,
+    s: [
+      for (final w in wins)
+        stressScore(hr: w.hr, rmssd: w.rmssd, refHr: refH, refRmssd: refR)
+    ],
+  );
+}
+
+Future<List<Widget>> loadStressNow(
+    BuildContext c, LocalRepository repo, VoidCallback reload) async {
+  final today = await xpStressToday(repo);
   if (!c.mounted) return const [];
-  final refR = t.hrvBase ?? t.rmssd;
-  final refH = t.rhr;
-  if (refR == null || refH == null) {
+  if (today == null) {
     return [
       xpNote(c, tr(c, 'Es fehlt noch ein Ruhepuls und eine HRV aus der Nacht als Vergleich.',
           'Needs last night’s resting HR and HRV as a reference.'))
     ];
   }
+  final (:wins, :s) = today;
   if (wins.isEmpty) {
     return [
       xpNote(c, tr(c, 'Heute sind noch keine Herzschläge synchronisiert.',
           'No beats synced yet today.'))
     ];
   }
-  final s = [
-    for (final w in wins)
-      stressScore(hr: w.hr, rmssd: w.rmssd, refHr: refH, refRmssd: refR)
-  ];
+  final now = DateTime.now();
   final last = wins.last;
   final ago = now.difference(last.start).inMinutes;
   return [
@@ -523,10 +477,6 @@ Future<List<Widget>> loadStressNow(
     const SizedBox(height: S.x3),
     xpStrip(c, s, 3, stressColor,
         left: clock(wins.first.start), right: clock(last.start)),
-    xpNote(
-        c,
-        tr(c, 'Je 15 Minuten, verglichen mit deinem Ruhepuls und deiner Nacht-HRV. Bewegung wird nicht herausgerechnet, ein Spaziergang zählt also mit. Neue Werte kommen mit jeder Synchronisierung.',
-            'Per 15 minutes, against your resting HR and night HRV. Movement is not removed, so a walk counts too. New values arrive with each sync.')),
   ];
 }
 
@@ -599,8 +549,18 @@ Future<List<Widget>> loadMuscleLoad(
 
 // ═══ 7 · Ziele ═══════════════════════════════════════════════════════════════
 
-Future<List<Widget>> loadGoals(
-    BuildContext c, LocalRepository repo, VoidCallback reload) async {
+/// The four weekly goals and how far along each is. Shared by the goals
+/// screen and the four small rings on Home.
+class XpGoal {
+  final String key;
+  final double? actual;
+  final double target;
+  final Color color;
+  const XpGoal(this.key, this.actual, this.target, this.color);
+  double get frac => actual == null || target <= 0 ? 0 : (actual! / target).clamp(0.0, 1.0);
+}
+
+Future<List<XpGoal>> xpGoals(LocalRepository repo) async {
   final g = xpGet('goals');
   final profile = await repo.getProfile();
   final stepGoal = (profile['step_goal'] as num?)?.toDouble() ?? 8000;
@@ -614,10 +574,26 @@ Future<List<Widget>> loadGoals(
   final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
   final sessions =
       await repo.getSessions(from: monday.millisecondsSinceEpoch ~/ 1000);
-  if (!c.mounted) return const [];
-  final stepsAvg = avgOf(steps.map((e) => e.$2));
   final sleepAvg = avgOf(sleep.map((e) => e.$2));
-  final strainNow = avgOf(strain.map((e) => e.$2));
+  return [
+    XpGoal('steps', avgOf(steps.map((e) => e.$2)), stepGoal, C.teal),
+    XpGoal('sleep_h', sleepAvg == null ? null : sleepAvg / 60, sleepH, C.indigo),
+    XpGoal('workouts', sessions.length.toDouble(), workouts.toDouble(), C.purple),
+    XpGoal('strain', avgOf(strain.map((e) => e.$2)), strainAvg, C.blue),
+  ];
+}
+
+String xpGoalLabel(BuildContext c, String key) => switch (key) {
+      'steps' => tr(c, 'Schritte', 'Steps'),
+      'sleep_h' => tr(c, 'Schlaf', 'Sleep'),
+      'workouts' => tr(c, 'Training', 'Workouts'),
+      _ => 'Strain',
+    };
+
+Future<List<Widget>> loadGoals(
+    BuildContext c, LocalRepository repo, VoidCallback reload) async {
+  final goals = {for (final g in await xpGoals(repo)) g.key: g};
+  if (!c.mounted) return const [];
 
   Future<void> edit(String key, String title, double value, double step,
       double min, double max) async {
@@ -653,33 +629,101 @@ Future<List<Widget>> loadGoals(
     reload();
   }
 
-  Widget goal(String key, String label, double? actual, double target,
-      String Function(double) fmt, double step, double min, double max,
-      {Color color = C.green}) {
+  Widget goal(String key, String label, String Function(double) fmt,
+      double step, double min, double max) {
+    final g = goals[key]!;
     return Pressable(
-      onTap: () => edit(key, label, target, step, min, max),
-      child: xpBar(c, label, actual == null ? 0 : actual / target,
-          '${actual == null ? '—' : fmt(actual)} / ${fmt(target)}',
-          color: (actual ?? 0) >= target ? C.green : color),
+      onTap: () => edit(key, label, g.target, step, min, max),
+      child: xpBar(c, label, g.frac,
+          '${g.actual == null ? '—' : fmt(g.actual!)} / ${fmt(g.target)}',
+          color: (g.actual ?? 0) >= g.target ? C.green : g.color),
     );
   }
 
   return [
     xpSection(tr(c, 'Diese Woche', 'This week'), [
       goal('steps', tr(c, 'Schritte pro Tag (Ø 7 Tage)', 'Steps per day (7-day avg)'),
-          stepsAvg, stepGoal, (v) => '${v.round()}', 500, 1000, 40000, color: C.teal),
+          (v) => '${v.round()}', 500, 1000, 40000),
       goal('sleep_h', tr(c, 'Schlaf pro Nacht (Ø 7 Tage)', 'Sleep per night (7-day avg)'),
-          sleepAvg == null ? null : sleepAvg / 60, sleepH,
-          (v) => '${v.toStringAsFixed(1)} h', .5, 5, 11, color: C.indigo),
+          (v) => '${v.toStringAsFixed(1)} h', .5, 5, 11),
       goal('workouts', tr(c, 'Trainings seit Montag', 'Workouts since Monday'),
-          sessions.length.toDouble(), workouts.toDouble(),
-          (v) => '${v.round()}', 1, 1, 14, color: C.purple),
+          (v) => '${v.round()}', 1, 1, 14),
       goal('strain', tr(c, 'Strain pro Tag (Ø 7 Tage)', 'Strain per day (7-day avg)'),
-          strainNow, strainAvg, (v) => v.toStringAsFixed(1), .5, 4, 21, color: C.blue),
+          (v) => v.toStringAsFixed(1), .5, 4, 21),
     ]),
-    xpNote(c, tr(c, 'Tippe auf ein Ziel, um es zu ändern. Das Schrittziel ist dasselbe wie auf Home; dein Gewichtsziel findest du unter Ernährung.',
-        'Tap a goal to change it. The step goal is the same one Home uses; your weight goal lives in Nutrition.')),
   ];
+}
+
+/// Edge+: the four goals as small rings, under the big three on Home. A tap
+/// opens the goals screen.
+class GoalRings extends StatefulWidget {
+  const GoalRings({super.key});
+
+  @override
+  State<GoalRings> createState() => _GoalRingsState();
+}
+
+class _GoalRingsState extends State<GoalRings> with RevisionReload {
+  List<XpGoal>? _goals;
+
+  @override
+  void initState() {
+    super.initState();
+    reload();
+  }
+
+  @override
+  void reload() async {
+    final repo = xpRepo(context);
+    if (repo == null) return;
+    final t = beginRead(#goals);
+    try {
+      final g = await xpGoals(repo);
+      if (stillNewest(#goals, t)) setState(() => _goals = g);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final goals = _goals;
+    if (goals == null) return const SizedBox.shrink();
+    final p = P.of(c);
+    final title = tr(c, 'Ziele', 'Goals');
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x3),
+      child: Surface(
+        semanticLabel: title,
+        onTap: () async {
+          await Navigator.of(c).push(MaterialPageRoute<void>(
+              builder: (_) => XpScreen(title, loadGoals)));
+          if (mounted) reload();
+        },
+        child: Row(children: [
+          for (final g in goals)
+            Expanded(
+              child: Column(children: [
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Stack(alignment: Alignment.center, children: [
+                    CustomPaint(
+                      size: Size.infinite,
+                      painter: Ring(g.frac, g.frac >= 1 ? C.green : g.color,
+                          p.track, stroke: 4, solid: true),
+                    ),
+                    Text('${(g.frac * 100).round()}',
+                        style: F.mini.copyWith(color: p.ink)),
+                  ]),
+                ),
+                const SizedBox(height: S.x1),
+                Text(xpGoalLabel(c, g.key),
+                    style: F.mini.copyWith(color: p.ink3)),
+              ]),
+            ),
+        ]),
+      ),
+    );
+  }
 }
 
 // ═══ 8 · Streak ══════════════════════════════════════════════════════════════
@@ -1109,13 +1153,8 @@ class WorkModeTile extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(tr(c, 'Arbeitsmodus', 'Work mode'), style: F.head.copyWith(color: p.ink)),
-                Text(
-                    on
-                        ? tr(c, 'Band vibriert in ${math.max(0, mins)} min: aufstehen und trinken.',
-                            'Band buzzes in ${math.max(0, mins)} min: stand up and drink.')
-                        : tr(c, 'Alle 45 min vibriert das Band: aufstehen und etwas trinken.',
-                            'Every 45 min the band buzzes: stand up and drink.'),
-                    style: F.cap.copyWith(color: p.ink2)),
+                if (on)
+                    Text('${math.max(0, mins)} min', style: F.cap.copyWith(color: p.ink2)),
               ]),
             ),
             Switch(
@@ -1134,36 +1173,18 @@ class WorkModeTile extends StatelessWidget {
 class XpFeature {
   final IconData icon;
   final Color color;
-  final String Function(BuildContext) title, sub;
+  final String Function(BuildContext) title;
   final XpLoader load;
-  const XpFeature(this.icon, this.color, this.title, this.sub, this.load);
+  const XpFeature(this.icon, this.color, this.title, this.load);
 }
 
+// Edge+: what is not yet at home anywhere else. Training advice, the weekly
+// plan and muscular load live on Activity, sleep stress and the sleep planner
+// on Sleep, stress now and the goals on Home, biological age under Health.
 final xpFeatures = <XpFeature>[
-  XpFeature(LucideIcons.dumbbell, C.green, (c) => tr(c, 'Trainingsempfehlung', 'Training advice'),
-      (c) => tr(c, 'Was heute zu deiner Recovery passt', 'What fits your recovery today'), loadTrainingAdvice),
-  XpFeature(LucideIcons.sunset, C.orange, (c) => tr(c, 'Tagesrückblick', 'Day in review'),
-      (c) => tr(c, 'Dein Tag auf einen Blick', 'Your day at a glance'), loadDayReview),
-  XpFeature(LucideIcons.bedDouble, C.indigo, (c) => tr(c, 'Schlafplaner', 'Sleep planner'),
-      (c) => tr(c, 'Wann du heute ins Bett solltest', 'When to go to bed tonight'), loadSleepPlanner),
-  XpFeature(LucideIcons.moonStar, C.indigo, (c) => tr(c, 'Schlaf-Stress', 'Sleep stress'),
-      (c) => tr(c, 'Wie unruhig die letzte Nacht war', 'How restless last night was'), loadSleepStress),
-  XpFeature(LucideIcons.activity, C.red, (c) => tr(c, 'Stress jetzt', 'Stress now'),
-      (c) => tr(c, 'Stress im Tagesverlauf, 0–3', 'Stress through the day, 0–3'), loadStressNow),
-  XpFeature(LucideIcons.bicepsFlexed, C.purple, (c) => tr(c, 'Muskuläre Belastung', 'Muscular load'),
-      (c) => tr(c, 'Belastung pro Muskel aus deinen Sätzen', 'Load per muscle from your sets'), loadMuscleLoad),
-  XpFeature(LucideIcons.target, C.green, (c) => tr(c, 'Ziele', 'Goals'),
-      (c) => tr(c, 'Schritte, Schlaf, Trainings, Strain', 'Steps, sleep, workouts, strain'), loadGoals),
-  XpFeature(LucideIcons.calendarDays, C.blue, (c) => tr(c, 'Wochenplan', 'Weekly plan'),
-      (c) => tr(c, 'Harte und lockere Tage planen', 'Plan hard and easy days'), loadWeekPlan),
-  XpFeature(LucideIcons.flame, C.orange, (c) => tr(c, 'Serien', 'Streaks'),
-      (c) => tr(c, 'Tage am Stück mit Ziel erreicht', 'Days in a row on target'), loadStreaks),
-  XpFeature(LucideIcons.hourglass, C.teal, (c) => tr(c, 'Biologisches Alter', 'Biological age'),
-      (c) => tr(c, 'Und wie schnell es sich ändert', 'And how fast it moves'), loadBioAge),
-  XpFeature(LucideIcons.fileText, C.blue, (c) => tr(c, 'Gesundheitsbericht', 'Health report'),
-      (c) => tr(c, '90 Tage als Datei zum Teilen', '90 days as a file to share'), loadReport),
-  XpFeature(LucideIcons.flower2, C.pink, (c) => tr(c, 'Zyklus-Analysen', 'Cycle analysis'),
-      (c) => tr(c, 'Recovery, Schlaf und Strain nach Zyklustag', 'Recovery, sleep and strain by cycle day'), loadCycleAnalysis),
+  XpFeature(LucideIcons.flame, C.orange, (c) => tr(c, 'Serien', 'Streaks'), loadStreaks),
+  XpFeature(LucideIcons.fileText, C.blue, (c) => tr(c, 'Gesundheitsbericht', 'Health report'), loadReport),
+  XpFeature(LucideIcons.flower2, C.pink, (c) => tr(c, 'Zyklus', 'Cycle'), loadCycleAnalysis),
 ];
 
 /// The "Experimentell" block for the bottom of Home.
@@ -1205,10 +1226,8 @@ class _ExperimentalSectionState extends State<ExperimentalSection> {
                     Icon(f.icon, color: p.on(f.color), size: 20),
                     const SizedBox(width: S.x3),
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(f.title(c), style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
-                        Text(f.sub(c), style: F.cap.copyWith(color: p.ink2)),
-                      ]),
+                      child: Text(f.title(c),
+                          style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
                     ),
                     Icon(LucideIcons.chevronRight, color: p.ink3, size: 18),
                   ]),
@@ -1216,11 +1235,6 @@ class _ExperimentalSectionState extends State<ExperimentalSection> {
               ),
           ]),
         ),
-        const SizedBox(height: S.x2),
-        Text(
-            tr(c, 'In Entwicklung. Die Werte sind Schätzungen und können sich noch ändern.',
-                'In development. Values are estimates and may still change.'),
-            style: F.cap.copyWith(color: p.ink2)),
       ]),
     );
   }

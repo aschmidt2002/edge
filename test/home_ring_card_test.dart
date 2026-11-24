@@ -615,39 +615,16 @@ void main() {
           sleepStages: const SleepStageMin(deep: 70, rem: 95, light: 277, awake: 30),
         );
 
+    // Edge+: a measured ring carries its number inside, so no caption is
+    // drawn under it in any language; the 92% is still spoken.
     for (final lang in ['de', 'en', 'es', 'fr', 'hi', 'ru', 'th', 'zh']) {
-      testWidgets(
-          'WHY: $lang at 320 pt x1.3 prints the 92% caption whole, within '
-          'the three reserved lines', (t) async {
+      testWidgets('$lang at 320 pt x1.3 draws no caption under a measured ring',
+          (t) async {
         await _rings(t, slept(), w: 320, scale: 1.3, locale: Locale(lang));
         expect(t.takeException(), isNull);
         final caption = find.byWidgetPredicate((w) =>
             w is Text && (w.data ?? '').contains('92') && !(w.data ?? '').contains(':'));
-        expect(caption, findsOneWidget, reason: 'one caption carrying the 92%');
-        final para = t.renderObject<RenderParagraph>(caption);
-        expect(para.didExceedMaxLines, isFalse,
-            reason: '$lang caption is cut by its line limit');
-        // Three lines is the reserved caption height; more would shift the card.
-        if (lang == 'th' && _thaiFontFile() == null) {
-          markTestSkipped('no Thai-capable font found (set $_thaiFontEnv, or '
-              'install FreeFont/Noto Sans Thai): the Thai three-line bound is '
-              'NOT measured on this machine');
-          return;
-        }
-        final fs = para.text.style?.fontSize ?? 12;
-        if (lang == 'th') {
-          // Proof the Thai face is in use: a real face gives the combining
-          // marks no advance, so the run is narrower than one em per code
-          // unit (the block face's width).
-          final text = para.text.toPlainText();
-          final tp = TextPainter(
-              text: TextSpan(text: text, style: para.text.style),
-              textDirection: TextDirection.ltr)
-            ..layout();
-          expect(tp.width, lessThan(text.length * fs * 0.9),
-              reason: 'Thai measured with a face that has no Thai glyphs');
-        }
-        expect(para.size.height / (fs * 1.3 * 1.5), lessThanOrEqualTo(3.01));
+        expect(caption, findsNothing);
       });
     }
   });

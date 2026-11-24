@@ -56,8 +56,6 @@ import '../../l10n/display_text.dart';
 import '../../l10n/decimal_text.dart';
 import '../../state/locale_controller.dart';
 import 'package:intl/intl.dart';
-import 'package:openstrap_analytics/onehz.dart'
-    show quietHrrMinDays, readinessCompositeMinBaseline;
 import '../../models/metric.dart';
 import '../../models/payloads.dart' show todayHeadlineOf;
 import '../../notify/notification_prefs.dart' show NotificationPrefs;
@@ -82,7 +80,11 @@ import 'metric_detail.dart';
 import 'readiness_detail.dart';
 import 'sleep_detail.dart';
 import 'health_screen.dart' show HealthScreen;
-import '../experimental/xp_features.dart' show ExperimentalSection;
+import '../../data/meal_plan_store.dart';
+import '../../notify/tap_router.dart' show kRouteWater;
+import '../experimental/xp_features.dart'
+    show ExperimentalSection, GoalRings, XpScreen, loadStressNow, xpStressToday;
+import '../experimental/xp_core.dart' show stressColor, stressWord;
 
 // ═══════════════════ shared plumbing ═══════════════════
 
@@ -1712,9 +1714,10 @@ class _RingText extends StatelessWidget {
             textAlign: align,
           ),
         // No reserved caption lines: an empty caption takes no space, so the
-        // card has no blank band under the rings.
-        if (r.sub.isNotEmpty) const SizedBox(height: 2),
-        if (r.sub.isNotEmpty)
+        // card has no blank band under the rings. Edge+: a settled measured
+        // ring already carries its number, so it has no caption either.
+        if ((!r.measured || r.provisional) && r.sub.isNotEmpty) const SizedBox(height: 2),
+        if ((!r.measured || r.provisional) && r.sub.isNotEmpty)
           LayoutBuilder(builder: (c, box) {
                   final l = AppLocalizations.of(c);
                   // The three-line bound is the centred column's; the big-text
@@ -2270,10 +2273,24 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       if (stillNewest(#home, t)) {
         setState(() => (_d = d, _days = days, _loading = false, _failed = false));
       }
+      if (day == null && widget.data == null) unawaited(_loadStress(repo));
     } catch (_) {
       if (stillNewest(#home, t)) {
         setState(() => (_loading = false, _failed = true));
       }
+    }
+  }
+
+  /// Edge+: the newest stress reading of today, or null while there is none.
+  ({double score, DateTime at})? _stress;
+
+  Future<void> _loadStress(LocalRepository repo) async {
+    try {
+      final r = await xpStressToday(repo);
+      if (r == null || r.s.isEmpty || !mounted) return;
+      setState(() => _stress = (score: r.s.last, at: r.wins.last.start));
+    } catch (_) {
+      // No beats readable: the tile stays away.
     }
   }
 
@@ -2484,10 +2501,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
               child: Text(l?.homeBackToToday ?? 'Back to today'),
             ),
           ),
-        if (!_loading && !_failed && widget.data == null) ...[
-          const SizedBox(height: S.x3),
-          firstWeekCard(c, days: _days.length, strainScored: false),
-        ],
         // The alarm lives on AppState too, so a load failure must not hide it.
         if (_day == null || _day == todayLabel())
           if (alarmArmOfContext(c) case final (DateTime?, AlarmArmState) a) ...[
@@ -2521,16 +2534,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
     // gates the plan/live-workout copy below, which is about what to DO
     // today and reads as a stale instruction on a day already in the past.
     final isToday = _day == null || _day == todayLabel();
-
-    // Until recovery can score for the first time: what arrives when.
-    // Also while the readiness note still counts nights: missed nights push
-    // the first score past the day-15 the count alone would show.
-    final recoveryNightsLeft = needMoreNightsFromNote(d.readiness.note);
-    final firstWeeks = isToday &&
-        widget.data == null &&
-        d.readiness.isEmpty &&
-        (_days.length <= readinessCompositeMinBaseline ||
-            recoveryNightsLeft != null);
 
     final stale = staleInsightsCard(d.insightsStale, syncOf(c), l);
     // Above the greeting, not below it: if the app had to rebuild the database
@@ -2600,6 +2603,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       if (bare) ...[
         // Edge+: the rings stay, empty, on a day with nothing recorded.
         rings,
+        if (isToday && widget.data == null) const GoalRings(),
         const SizedBox(height: S.x3),
         // A live workout holds derivation, so a bare day with a session open
         // is the hold at work, not a sync problem — see [workoutHoldCard].
@@ -2608,15 +2612,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         isToday && (widget.workoutLive ?? workoutLiveOf(c))
             ? workoutHoldCard(l)
             : _bareStatusCard(c, d, l, pastDay: !isToday),
-        // The first morning is exactly when "when do I get numbers?" is
-        // loudest.
-        if (firstWeeks) ...[
-          const SizedBox(height: S.x3),
-          firstWeekCard(c,
-              days: _days.length,
-              strainScored: false,
-              recoveryNightsLeft: recoveryNightsLeft),
-        ],
       ] else ...[
         // ── the three rings ──
         //
@@ -2630,6 +2625,8 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         // one tap away, on the Readiness screen: a wall of per-input
         // diagnostics on Home makes the app read as broken.
         rings,
+        // Edge+: the four weekly goals, small, under the big three.
+        if (isToday && widget.data == null) const GoalRings(),
 
         const SizedBox(height: S.x3),
         const DetectedActivitiesCard(),
@@ -2644,13 +2641,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
         // when" card follows them.
         Section(l?.homeAtAGlance ?? 'At a glance',
             _glance(c, d, isToday: isToday)),
-        if (firstWeeks) ...[
-          const SizedBox(height: S.x3),
-          firstWeekCard(c,
-              days: _days.length,
-              strainScored: !d.strain.isEmpty,
-              recoveryNightsLeft: recoveryNightsLeft),
-        ],
 
         // ── today's plan: only what the app can actually stand behind ──
         // Skipped on a past day — "3,000 steps left" or "aim for 11.4
@@ -2870,39 +2860,26 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
               ),
             ),
     ));
-    // Edge+: breathing, skin temperature and HRV, same tiles, under the
-    // first row. All three are read from last night.
+    // Edge+: skin temperature as last night's distance from your normal,
+    // only once there is one. Breathing and HRV live on Sleep and Health.
     String signed(double v, int dp) =>
         '${v >= 0 ? '+' : ''}${displayFixed(v, dp)}';
-    const none = '–';
-    cards.add(SignalCard(LucideIcons.wind, C.blue, tr(c, 'Atmung', 'Breathing'),
-        d.respRate == null ? none : displayFixed(d.respRate!, 1),
-        unit: d.respRate == null ? '' : '/min',
-        sub: d.respRate == null
-            ? tr(c, 'Keine Daten', 'No data')
-            : tr(c, 'Letzte Nacht', 'Last night'),
-        onTap: () => go(c, detail('resp_rate'))));
-    cards.add(SignalCard(LucideIcons.thermometer, C.orange,
-        tr(c, 'Körpertemperatur', 'Body temperature'),
-        d.skinDevC != null
-            ? signed(d.skinDevC!, 1)
-            : d.skinZ != null
-                ? signed(d.skinZ!, 1)
-                : none,
-        unit: d.skinDevC != null ? '°C' : '',
-        sub: d.skinDevC != null
-            ? tr(c, 'vs. normal', 'vs. usual')
-            : d.skinZ != null
-                ? tr(c, 'Abweichung (relativ)', 'Deviation (relative)')
-                : tr(c, 'Keine Daten', 'No data'),
-        onTap: () => go(c, detail('skin_temp'))));
-    cards.add(SignalCard(LucideIcons.activity, C.purple, 'HRV',
-        d.hrvMs == null ? none : '${d.hrvMs!.round()}',
-        unit: d.hrvMs == null ? '' : 'ms',
-        sub: d.hrvMs == null
-            ? tr(c, 'Keine Daten', 'No data')
-            : tr(c, 'Letzte Nacht', 'Last night'),
-        onTap: () => go(c, detail('hrv'))));
+    if (d.skinDevC != null || d.skinZ != null) {
+      cards.add(SignalCard(LucideIcons.thermometer, C.orange,
+          tr(c, 'Hauttemperatur', 'Skin temperature'),
+          signed(d.skinDevC ?? d.skinZ!, 1),
+          unit: d.skinDevC != null ? '°C' : '',
+          sub: tr(c, 'vs. normal', 'vs. usual'),
+          onTap: () => go(c, detail('skin_temp'))));
+    }
+    // Edge+: stress right now, from today's beats (experimental).
+    final s = isToday ? _stress : null;
+    if (s != null) {
+      cards.add(SignalCard(LucideIcons.activity, stressColor(s.score), 'Stress',
+          displayFixed(s.score, 1),
+          sub: '${stressWord(c, s.score)} · ${formatClockOf(s.at)}',
+          onTap: () => go(c, XpScreen(tr(c, 'Stress', 'Stress'), loadStressNow))));
+    }
     add(
       d.calories,
       () => SignalCard(LucideIcons.flame, C.orange, l?.homeActiveEnergy ?? 'Active energy',
@@ -3035,6 +3012,46 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           false));
     }
 
+    // Edge+: today's planned meals, or one way to plan them.
+    void toNutrition() {
+      // The water route is the deep link that lands on the Nutrition tab.
+      try {
+        c.read<AppState>().screenRequest.value = kRouteWater;
+      } catch (_) {}
+    }
+    final meals = MealPlanStore.forDay(d.dayId ?? todayLabel());
+    final mealName = {
+      'breakfast': l?.nutritionMealBreakfast ?? 'Breakfast',
+      'lunch': l?.nutritionMealLunch ?? 'Lunch',
+      'dinner': l?.nutritionMealDinner ?? 'Dinner',
+    };
+    for (final m in meals) {
+      rows.add(Pressable(
+        onTap: toNutrition,
+        child: _row(p, LucideIcons.utensils, C.domFood, m.name,
+            mealName[m.meal] ?? (l?.nutritionMealSnacks ?? 'Snacks'),
+            m.kcal == null ? '' : '${m.kcal!.round()} kcal', false),
+      ));
+    }
+    if (meals.isEmpty) {
+      rows.add(Pressable(
+        onTap: toNutrition,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: S.x3),
+          child: Row(children: [
+            Icon(LucideIcons.plus, size: 18, color: p.on(C.domFood)),
+            const SizedBox(width: S.x3),
+            Expanded(
+              child: Text(tr(c, 'Mahlzeiten planen', 'Plan meals'),
+                  style: F.body.copyWith(
+                      color: p.on(C.domFood), fontWeight: FontWeight.w600)),
+            ),
+            Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+          ]),
+        ),
+      ));
+    }
+
     final planBody = rows.isEmpty
         ? StatusCard.forMetric(l?.homeNoPlanTitle ?? 'No plan for today yet', d.sleepNeedMin,
                 // "none are established yet" is the COLD-START reason, and it
@@ -3144,11 +3161,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       );
 }
 
-/// What happens in the first weeks, with the counts the pipeline actually
-/// gates on: sleep after the first night, strain once [quietHrrMinDays] earlier
-/// days give it a resting level, recovery once [readinessCompositeMinBaseline]
-/// earlier nights give it a normal range. Read from the analytics constants so
-/// the card cannot drift from the gate.
 /// Edge+: Health is no longer a tab. This long row under the header is the
 /// way in, with the illness watch's colour on its icon.
 Widget healthDoor(BuildContext c, HomeData d) {
@@ -3186,53 +3198,6 @@ Widget healthDoor(BuildContext c, HomeData d) {
         ]),
       ),
       Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
-    ]),
-  );
-}
-
-Widget firstWeekCard(BuildContext c,
-    {required int days, required bool strainScored, int? recoveryNightsLeft}) {
-  final p = P.of(c);
-  final l = AppLocalizations.of(c);
-  final strainDay = quietHrrMinDays + 1;
-  final recoveryNight = readinessCompositeMinBaseline + 1;
-  Widget step(bool done, String text) => Semantics(
-        // The tick is drawn, so it is also said.
-        label: done ? (l?.homeFirstWeekDone(text) ?? 'Done: $text') : text,
-        excludeSemantics: true,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: S.x2),
-          child: Row(children: [
-            Icon(done ? LucideIcons.circleCheck : LucideIcons.circle,
-                size: 18, color: done ? p.on(C.green) : p.ink3),
-            const SizedBox(width: S.x3),
-            Expanded(
-                child: Text(text, style: F.body.copyWith(color: p.ink))),
-          ]),
-        ),
-      );
-  return Surface(
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(l?.homeFirstWeekTitle ?? 'Your first weeks',
-          style: F.head.copyWith(color: p.ink)),
-      const SizedBox(height: S.x2),
-      step(days > 0, l?.homeFirstWeekWear ?? 'Wear the band tonight'),
-      step(days > 0,
-          l?.homeFirstWeekSleep ?? 'Sleep: the morning after your first night'),
-      step(strainScored,
-          l?.homeFirstWeekStrain(strainDay) ?? 'Strain: from day $strainDay'),
-      // The live countdown when the pipeline says how many nights are left;
-      // the static "from night N" only before it has said anything.
-      step(
-          false,
-          recoveryNightsLeft != null
-              ? (l?.homeRecoveryStartsIn(recoveryNightsLeft) ??
-                  'Recovery starts in $recoveryNightsLeft nights')
-              : (l?.homeFirstWeekRecovery(recoveryNight) ??
-                  'Recovery: from night $recoveryNight, once it knows your normal')),
-      const SizedBox(height: S.x1),
-      Text(l?.homeFirstWeekSoFar(days) ?? '$days days recorded so far',
-          style: F.cap.copyWith(color: p.ink3)),
     ]),
   );
 }
