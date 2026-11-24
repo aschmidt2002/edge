@@ -2477,7 +2477,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       return _refreshable(ListView(padding: pad, children: [
         // Edge+: the same greeting and header as an ordinary day.
         _greetingRow(c, p, g, null),
-        TabHeader(day: _day ?? todayLabel(), days: _days, onDay: _goDay),
+        TabHeader(day: _day ?? todayLabel(), days: _days, onDay: _goDay, report: true),
         // Edge+: the rings stay on screen even before anything is recorded.
         if (!_loading) ...[
           RingTrio(d: HomeData(dayId: _day ?? todayLabel())),
@@ -2593,7 +2593,7 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       // ── greeting ── Edge+: only the greeting, centred.
       _greetingRow(c, p, g, d.name),
       // Edge+: band status · day · profile in one row.
-      TabHeader(day: _day ?? d.dayId, days: _days, onDay: _goDay),
+      TabHeader(day: _day ?? d.dayId, days: _days, onDay: _goDay, report: true),
       // Edge+: Health lives under Home now.
       healthDoor(c, d),
       const SizedBox(height: S.x3),
