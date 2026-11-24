@@ -59,7 +59,7 @@ void main() {
         TodayWeather.fromOpenMeteo({
           'current': {'temperature_2m': 4.2, 'apparent_temperature': 1.0, 'weather_code': 3},
           'daily': {'temperature_2m_min': [1.0], 'temperature_2m_max': [6.5], 'uv_index_max': [1.2]},
-        })?.description,
+        })?.description(),
         'Bewölkt');
   });
 }

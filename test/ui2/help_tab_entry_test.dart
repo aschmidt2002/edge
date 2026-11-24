@@ -30,7 +30,17 @@ void main() {
       final semantics = t.ensureSemantics();
       try {
         await pumpLiveGuideApp(t, brightness: Brightness.dark);
-        await t.tap(r2Tab(topic.index));
+        // Edge+: Health has no tab; it opens from its row on Home.
+        if (topic == GuideTopic.health) {
+          await t.tap(r2Tab(0));
+          await settleLiveGuide(t);
+          final door = find.text('Health');
+          await t.scrollUntilVisible(door, 300,
+              scrollable: find.byType(Scrollable).first);
+          await t.tap(door);
+        } else {
+          await t.tap(r2Tab(topic.index));
+        }
         await settleLiveGuide(t);
         for (
           var i = 0;

@@ -2680,6 +2680,9 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
           const SizedBox(height: S.x3),
           alarmDoor(c, a.$1, a.$2),
         ],
+      // Edge+: features still being tried out, at the bottom, above the
+      // coach and Help (which stay together).
+      if (isToday && widget.data == null) const ExperimentalSection(),
       // The coach, set up or not, on every ordinary or bare today.
       if (isToday) ...[
         const SizedBox(height: S.x4),
@@ -2687,8 +2690,6 @@ class _HomeScreenState extends State<HomeScreen> with RevisionReload {
       ],
       // The Today guide starts on the strain ring, which a bare past day does not draw.
       if (isToday) const HelpEntry(topic: GuideTopic.today),
-      // Edge+: features still being tried out, at the very bottom.
-      if (isToday && widget.data == null) const ExperimentalSection(),
     ]));
   }
 

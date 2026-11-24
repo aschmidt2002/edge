@@ -198,7 +198,8 @@ void main() {
       expect(find.text('No model is set up'), findsOneWidget);
       app.navigator.pop();
       await settleLiveGuide(t);
-      expect(_press('Set up the coach'), findsOneWidget);
+      // Edge+: the Experimental section sits between the briefing and the chip.
+      await _reveal(t, _press('Set up the coach'));
       await _dispose(t, app);
       config.dispose();
     }, () => fake.client);
