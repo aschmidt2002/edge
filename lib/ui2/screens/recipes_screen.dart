@@ -15,6 +15,8 @@ import '../../data/meal_plan_store.dart';
 import '../../data/nutrition_store.dart';
 import '../../data/recipes.dart';
 import '../../state/prefs.dart';
+import '../profile/profile.dart' show SetRow;
+import 'journal_compose.dart' show OsTextField;
 import '../ui2.dart';
 
 /// What the picker or the recipe page hands back.
@@ -25,7 +27,15 @@ class RecipePick {
     this.servings = 1,
     this.eat = false,
     this.remove = false,
+    this.fixed,
+    this.repeat,
   });
+
+  /// Nutrition for a pick without a recipe (an earlier entry), as given.
+  final Nutrients? fixed;
+
+  /// The earlier entry this pick repeats, when it came from the log.
+  final FoodEntry? repeat;
 
   /// Null for a meal planned by name only.
   final Recipe? recipe;
@@ -40,7 +50,7 @@ class RecipePick {
 
   Nutrients? get nutrients {
     final r = recipe;
-    return r == null ? null : perServing(r) * servings;
+    return r == null ? fixed : perServing(r) * servings;
   }
 
   PlannedMeal toPlanned(String meal) {
@@ -149,10 +159,40 @@ class RecipePickerPage extends StatefulWidget {
 class _RecipePickerPageState extends State<RecipePickerPage> {
   final _q = TextEditingController();
 
+  /// Distinct earlier entries, newest first: the first five on top, the rest
+  /// in the list with the recipes.
+  List<FoodEntry> _past = const [];
+  List<Recipe> _recipes = allRecipes();
+
   @override
   void initState() {
     super.initState();
     _q.addListener(() => setState(() {}));
+    _loadPast();
+  }
+
+  Future<void> _loadPast() async {
+    final r = await NutritionDb.recent(await LocalDb.instance, limit: 60);
+    if (mounted) setState(() => _past = r);
+  }
+
+  bool _hit(String name) =>
+      name.toLowerCase().contains(_q.text.trim().toLowerCase());
+
+  /// An earlier entry, again: logged as it was, or planned by its name.
+  void _again(FoodEntry e) {
+    final n = e.kcal == null
+        ? null
+        : Nutrients(e.kcal!, e.proteinG ?? 0, e.carbsG ?? 0, e.fatG ?? 0,
+            e.fibreG ?? 0);
+    Navigator.of(context).pop(RecipePick(
+        name: e.label, fixed: n, repeat: e, eat: widget.canEat));
+  }
+
+  Future<void> _create() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => RecipeEditorPage(meal: widget.meal)));
+    if (mounted) setState(() => _recipes = allRecipes());
   }
 
   @override
@@ -164,7 +204,7 @@ class _RecipePickerPageState extends State<RecipePickerPage> {
   List<Recipe> get _list {
     final q = _q.text.trim().toLowerCase();
     final hits = [
-      for (final r in kRecipes)
+      for (final r in _recipes)
         if (q.isEmpty ||
             r.name.toLowerCase().contains(q) ||
             r.items.any((i) => i.ingredient.name.toLowerCase().contains(q)))
@@ -182,7 +222,12 @@ class _RecipePickerPageState extends State<RecipePickerPage> {
   Future<void> _open(Recipe r) async {
     final pick = await RecipeDetailPage.open(context, r,
         canEat: widget.canEat, canPlan: widget.canPlan);
-    if (pick != null && mounted) Navigator.of(context).pop(pick);
+    if (!mounted) return;
+    if (pick != null) {
+      Navigator.of(context).pop(pick);
+    } else {
+      setState(() => _recipes = allRecipes());
+    }
   }
 
   @override
@@ -196,7 +241,14 @@ class _RecipePickerPageState extends State<RecipePickerPage> {
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: S.x4),
-            child: NavBar(tr(c, 'Rezepte', 'Recipes')),
+            child: NavBar(
+              tr(c, 'Rezepte', 'Recipes'),
+              trailing: Pressable(
+                semanticLabel: tr(c, 'Rezept erstellen', 'New recipe'),
+                onTap: _create,
+                child: Icon(LucideIcons.plus, size: 22, color: p.ink),
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x3),
@@ -244,10 +296,22 @@ class _RecipePickerPageState extends State<RecipePickerPage> {
                       ]),
                     ),
                   ),
+                if (q.isEmpty && _past.isNotEmpty) ...[
+                  Surface(
+                    pad: const EdgeInsets.symmetric(horizontal: S.x4),
+                    child: Column(children: [
+                      for (final e in _past.take(5))
+                        _PastRow(e, onTap: () => _again(e)),
+                    ]),
+                  ),
+                  const SizedBox(height: S.x3),
+                ],
                 Surface(
                   pad: const EdgeInsets.symmetric(horizontal: S.x4),
                   child: Column(children: [
                     for (final r in list) _RecipeRow(r, onTap: () => _open(r)),
+                    for (final e in q.isEmpty ? _past.skip(5) : _past)
+                      if (_hit(e.label)) _PastRow(e, onTap: () => _again(e)),
                   ]),
                 ),
               ],
@@ -282,6 +346,37 @@ class _RecipeRow extends StatelessWidget {
             ]),
           ),
           Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),
+        ]),
+      ),
+    );
+  }
+}
+
+class _PastRow extends StatelessWidget {
+  const _PastRow(this.e, {this.onTap});
+  final FoodEntry e;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: e.label,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: S.x3),
+        child: Row(children: [
+          Icon(LucideIcons.history, size: 16, color: p.ink3),
+          const SizedBox(width: S.x3),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(e.label, style: F.body.copyWith(color: p.ink)),
+              if (e.kcal != null)
+                Text('${e.kcal!.round()} kcal',
+                    style: F.cap.copyWith(color: p.ink3)),
+            ]),
+          ),
+          Icon(LucideIcons.circlePlus, size: 18, color: p.on(C.domFood)),
         ]),
       ),
     );
@@ -363,7 +458,15 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             padding: const EdgeInsets.symmetric(horizontal: S.x4),
             child: NavBar(
               r.name,
-              trailing: widget.planned
+              trailing: !widget.planned && r.custom
+                  ? Pressable(
+                      semanticLabel: tr(c, 'Rezept bearbeiten', 'Edit recipe'),
+                      onTap: () => Navigator.of(c).pushReplacement(
+                          MaterialPageRoute<RecipePick>(
+                              builder: (_) => RecipeEditorPage(recipe: r))),
+                      child: Icon(LucideIcons.pencil, size: 20, color: p.ink2),
+                    )
+                  : widget.planned
                   ? Pressable(
                       semanticLabel: tr(c, 'Aus dem Plan entfernen',
                           'Remove from the plan'),
@@ -497,6 +600,310 @@ class _Head extends StatelessWidget {
         if (trailing != null)
           Text(trailing!, style: F.cap.copyWith(color: p.ink3)),
       ]),
+    );
+  }
+}
+
+// ══════════════════ RECIPE EDITOR ══════════════════
+
+/// Write or change one of the user's own recipes. Ingredients come from the
+/// same table as the built-in book, so the recipe lands on the shopping list.
+class RecipeEditorPage extends StatefulWidget {
+  const RecipeEditorPage({super.key, this.recipe, this.meal = 'lunch'});
+
+  /// The recipe to change; null writes a new one.
+  final Recipe? recipe;
+  final String meal;
+
+  @override
+  State<RecipeEditorPage> createState() => _RecipeEditorPageState();
+}
+
+class _RecipeEditorPageState extends State<RecipeEditorPage> {
+  late final _name = TextEditingController(text: widget.recipe?.name ?? '');
+  late final _steps =
+      TextEditingController(text: widget.recipe?.steps.join('\n') ?? '');
+  late int _servings = widget.recipe?.servings ?? 1;
+  late final Set<String> _meals = {...?widget.recipe?.meals}
+    ..addAll(widget.recipe == null ? [widget.meal] : const []);
+  late final List<(String, TextEditingController)> _items = [
+    for (final i in widget.recipe?.items ?? const <RecipeItem>[])
+      (i.key, TextEditingController(text: i.g == 0 ? '' : _num(i.g))),
+  ];
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _steps.dispose();
+    for (final i in _items) {
+      i.$2.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _addItem() async {
+    final key = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      sheetAnimationStyle: sheetMotion(context),
+      backgroundColor: P.of(context).card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.xxl)),
+      ),
+      builder: (_) => const _IngredientPicker(),
+    );
+    if (key != null) {
+      setState(() => _items.add((key, TextEditingController())));
+    }
+  }
+
+  void _save() {
+    final name = _name.text.trim();
+    final items = [
+      for (final (k, ctl) in _items)
+        RecipeItem(k,
+            double.tryParse(ctl.text.trim().replaceAll(',', '.'))?.clamp(0, 5000).toDouble() ??
+                0),
+    ];
+    if (name.isEmpty || items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr(context, 'Name und mindestens eine Zutat fehlen.',
+              'A name and at least one ingredient are needed.'))));
+      return;
+    }
+    CustomRecipes.put(Recipe(
+      id: widget.recipe?.id ?? CustomRecipes.newId(),
+      name: name,
+      meals: [for (final m in kMeals) if (_meals.contains(m)) m],
+      servings: _servings,
+      minutes: widget.recipe?.minutes ?? 0,
+      items: items,
+      steps: [
+        for (final l in _steps.text.split('\n'))
+          if (l.trim().isNotEmpty) l.trim(),
+      ],
+    ));
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _delete() async {
+    final r = widget.recipe!;
+    final ok = await confirmRemove(context,
+        title: tr(context, '${r.name} löschen?', 'Delete ${r.name}?'),
+        body: '',
+        remove: tr(context, 'Löschen', 'Delete'),
+        keep: tr(context, 'Behalten', 'Keep'));
+    if (!ok || !mounted) return;
+    CustomRecipes.delete(r.id);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    const meals = {
+      'breakfast': ('Frühstück', 'Breakfast'),
+      'lunch': ('Mittag', 'Lunch'),
+      'dinner': ('Abend', 'Dinner'),
+      'snack': ('Snack', 'Snack'),
+    };
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: S.x4),
+            child: NavBar(
+              widget.recipe == null
+                  ? tr(c, 'Neues Rezept', 'New recipe')
+                  : tr(c, 'Rezept bearbeiten', 'Edit recipe'),
+              trailing: widget.recipe == null
+                  ? null
+                  : Pressable(
+                      semanticLabel: tr(c, 'Löschen', 'Delete'),
+                      onTap: _delete,
+                      child: Icon(LucideIcons.trash2, size: 20, color: p.ink2),
+                    ),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(S.x4, 0, S.x4, S.x8),
+              children: [
+                OsTextField(
+                  controller: _name,
+                  label: tr(c, 'Name', 'Name'),
+                  hint: tr(c, 'z. B. Omas Gulasch', 'e.g. Granny’s goulash'),
+                ),
+                const SizedBox(height: S.x3),
+                Row(children: [
+                  for (final m in kMeals) ...[
+                    Expanded(
+                      child: Pressable(
+                        onTap: () => setState(() =>
+                            _meals.contains(m) ? _meals.remove(m) : _meals.add(m)),
+                        semanticLabel: tr(c, meals[m]!.$1, meals[m]!.$2),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: S.x3),
+                          decoration: BoxDecoration(
+                            color: _meals.contains(m) ? p.fill(C.domFood) : p.card2,
+                            borderRadius: R.rSm,
+                          ),
+                          child: Center(
+                            child: Text(tr(c, meals[m]!.$1, meals[m]!.$2),
+                                style: F.cap.copyWith(
+                                    color: _meals.contains(m)
+                                        ? p.inkOnFill
+                                        : p.ink2)),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (m != kMeals.last) const SizedBox(width: S.x2),
+                  ],
+                ]),
+                const SizedBox(height: S.x3),
+                Surface(
+                  child: Row(children: [
+                    Pressable(
+                      onTap: _servings <= 1
+                          ? null
+                          : () => setState(() => _servings--),
+                      semanticLabel: tr(c, 'Weniger', 'Less'),
+                      child: Icon(LucideIcons.minus, size: 20, color: p.ink2),
+                    ),
+                    Expanded(
+                      child: Text(servingsLabel(c, _servings.toDouble()),
+                          textAlign: TextAlign.center,
+                          style: F.body.copyWith(color: p.ink)),
+                    ),
+                    Pressable(
+                      onTap: _servings >= 12
+                          ? null
+                          : () => setState(() => _servings++),
+                      semanticLabel: tr(c, 'Mehr', 'More'),
+                      child: Icon(LucideIcons.plus, size: 20, color: p.ink2),
+                    ),
+                  ]),
+                ),
+                _Head(tr(c, 'Zutaten', 'Ingredients')),
+                Surface(
+                  pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x2),
+                  child: Column(children: [
+                    for (var i = 0; i < _items.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: S.x1),
+                        child: Row(children: [
+                          Expanded(
+                            child: Text(kIngredients[_items[i].$1]!.name,
+                                style: F.body.copyWith(color: p.ink)),
+                          ),
+                          if (kIngredients[_items[i].$1]!.aisle != Aisle.spices)
+                            SizedBox(
+                              width: 90,
+                              child: TextField(
+                                controller: _items[i].$2,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(decimal: true),
+                                textAlign: TextAlign.end,
+                                style: F.body.copyWith(color: p.ink),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  border: InputBorder.none,
+                                  hintText: '0',
+                                  suffixText:
+                                      kIngredients[_items[i].$1]!.ml ? ' ml' : ' g',
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: S.x2),
+                          Pressable(
+                            onTap: () => setState(() => _items.removeAt(i).$2.dispose()),
+                            semanticLabel: tr(c, 'Entfernen', 'Remove'),
+                            child: Icon(LucideIcons.x, size: 18, color: p.ink3),
+                          ),
+                        ]),
+                      ),
+                    SetRow(LucideIcons.plus, C.domFood,
+                        tr(c, 'Zutat hinzufügen', 'Add ingredient'),
+                        chevron: false, onTap: _addItem),
+                  ]),
+                ),
+                _Head(tr(c, 'Zubereitung', 'Method')),
+                OsTextField(
+                  controller: _steps,
+                  label: tr(c, 'Schritte, einer pro Zeile', 'Steps, one per line'),
+                  hint: '',
+                  lines: 6,
+                ),
+                const SizedBox(height: S.x5),
+                BigButton(tr(c, 'Speichern', 'Save'),
+                    icon: LucideIcons.check, color: C.domFood, onTap: _save),
+              ],
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _IngredientPicker extends StatefulWidget {
+  const _IngredientPicker();
+
+  @override
+  State<_IngredientPicker> createState() => _IngredientPickerState();
+}
+
+class _IngredientPickerState extends State<_IngredientPicker> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final keys = [
+      for (final e in kIngredients.entries)
+        if (e.value.name.toLowerCase().contains(_q.toLowerCase())) e.key,
+    ]..sort((a, b) => kIngredients[a]!.name.compareTo(kIngredients[b]!.name));
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(c).bottom),
+      child: SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(c).height * 0.7,
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.all(S.x4),
+              child: TextField(
+                autofocus: true,
+                onChanged: (v) => setState(() => _q = v.trim()),
+                style: F.body.copyWith(color: p.ink),
+                decoration: InputDecoration(
+                  prefixIcon: Icon(LucideIcons.search, size: 17, color: p.ink3),
+                  hintText: tr(c, 'Produkt suchen', 'Search products'),
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: S.x4),
+                children: [
+                  for (final k in keys)
+                    Pressable(
+                      onTap: () => Navigator.of(c).pop(k),
+                      semanticLabel: kIngredients[k]!.name,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: S.x3),
+                        child: Text(kIngredients[k]!.name,
+                            style: F.body.copyWith(color: p.ink)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

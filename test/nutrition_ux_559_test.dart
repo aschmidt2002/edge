@@ -18,6 +18,7 @@ import 'package:openstrap_edge/ui2/screens/journal_compose.dart'
     show OsTextField;
 import 'package:openstrap_edge/ui2/screens/log_food.dart';
 import 'package:openstrap_edge/ui2/screens/nutrition_screen.dart';
+import 'package:openstrap_edge/ui2/screens/recipes_screen.dart';
 import 'package:openstrap_edge/ui2/ui2.dart';
 
 FoodEntry _e(String id, String label,
@@ -128,23 +129,22 @@ void main() {
         'a_b bar');
   });
 
-  testWidgets('the log sheet searches past foods', (t) async {
+  testWidgets('the recipe picker lists past foods: five on top, all searchable',
+      (t) async {
     await t.runAsync(() async {
       for (var i = 0; i < 8; i++) {
         await NutritionDb.put(db, _e('f$i', 'Food $i', kcal: 10));
         await Future<void>.delayed(const Duration(milliseconds: 3));
       }
-      await NutritionDb.put(db, _e('fz', 'Oat porridge', kcal: 300));
     });
-    await _pump(t, const LogFoodSheet());
-    expect(find.text('Food 0'), findsNothing, reason: 'only five by default');
-    await t.enterText(_field('SEARCH YOUR FOODS'), 'Food 0');
-    await _settle(t);
-    expect(find.widgetWithText(FoodRow, 'Food 0'), findsOneWidget);
-    expect(find.text('Oat porridge'), findsNothing);
-    await t.enterText(_field('SEARCH YOUR FOODS'), 'zzz');
-    await _settle(t);
-    expect(find.text('Nothing you have logged matches that.'), findsOneWidget);
+    await _pump(t, const RecipePickerPage(meal: 'lunch'));
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await t.pump();
+    expect(find.text('Food 7'), findsOneWidget, reason: 'newest on top');
+    await t.enterText(find.byType(TextField).first, 'Food 0');
+    await t.pump();
+    expect(find.text('Food 0'), findsWidgets, reason: 'older ones searchable');
+    expect(find.text('Food 7'), findsNothing);
   });
 
   testWidgets('a meal can be logged at a chosen time', (t) async {
@@ -183,7 +183,7 @@ void main() {
 
     await t.tap(find.text('Chocolate bar'));
     await t.pumpAndSettle();
-    expect(find.text('Edit this entry'), findsOneWidget);
+    expect(find.text('Remove this entry'), findsOneWidget);
     await t.enterText(_field('ENERGY (KCAL)'), '480');
     await t.tap(find.descendant(
         of: find.byType(LogFoodSheet), matching: find.text('Dinner')));

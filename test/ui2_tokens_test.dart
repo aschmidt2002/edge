@@ -215,6 +215,7 @@ const _notComponents = {
   'TrainingPlansScreen', 'TrainingPlanEditor', 'TrainingPlanProgress',
   // Edge+ recipes: Scaffold routes that pop a pick or read the week plan.
   'RecipePickerPage', 'RecipeDetailPage', 'ShoppingListPage',
+  'RecipeEditorPage',
   // WHOOP MG ECG routes: the Heart Screener entry reads the database and
   // pushes; the capture screen owns a live BLE reading (a gallery case would
   // start one); the detail screen reads and deletes a reading and routes to
