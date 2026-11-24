@@ -95,6 +95,8 @@ import '../ui2.dart';
 import 'profile.dart';
 import 'settings.dart' show backToRoot;
 import 'wearable_numbers.dart' show DeviceUseSwitch, WearableDayScreen;
+import '../../oralb/oralb.dart' show OralBStore;
+import '../screens/dental_screen.dart' show OralBConnectScreen;
 
 /// Measurement quality, which is the ONLY thing that decides precedence.
 enum SourceTier {
@@ -1643,6 +1645,19 @@ extension _PairSection on MyDevicesView {
           pad: const EdgeInsets.symmetric(horizontal: S.x4),
           child: SetRow(LucideIcons.plus, C.green, l.pairAddDevice,
               sub: l.pairAddDeviceSub, onTap: onAddSensor),
+        ),
+      // Edge+: the Oral-B brush, heard from its adverts (lib/oralb).
+      if (onAddSensor != null)
+        ValueListenableBuilder<int>(
+          valueListenable: OralBStore.changed,
+          builder: (c, _, _) => Surface(
+            pad: const EdgeInsets.symmetric(horizontal: S.x4),
+            child: SetRow(LucideIcons.smile, C.teal, tr(c, 'Zahnbürste', 'Toothbrush'),
+                sub: OralBStore.paired
+                    ? OralBStore.deviceName
+                    : tr(c, 'Oral-B verbinden', 'Connect an Oral-B'),
+                onTap: () => goto(c, const OralBConnectScreen())),
+          ),
         ),
     ];
     if (children.isEmpty) return const [];
