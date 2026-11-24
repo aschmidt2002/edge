@@ -205,6 +205,8 @@ const _notComponents = {
   // Edge+: recovery / race card reads sessions; the fasting card owns a
   // ticking clock and Prefs.
   'RunInsightsCard', 'FastingCard',
+  // Edge+ activity progress: reads strength_set and Prefs; the editor is a route.
+  'ProgressSection', 'GoalEditor',
   // shell and routing
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
