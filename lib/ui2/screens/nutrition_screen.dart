@@ -29,6 +29,7 @@ import '../ui2.dart';
 import '../onboarding/profile_setup.dart' show formatDay;
 import 'journal_compose.dart' show OsTextField;
 import 'log_food.dart';
+import 'fasting.dart';
 import 'nutrition_plus.dart';
 import '../profile/profile.dart' show ProfileAvatar, SetRow;
 import 'food_ai_key_sheet.dart';
@@ -621,6 +622,8 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
               if (mounted) await _load();
             },
           ),
+          const SizedBox(height: S.x3),
+          const FastingCard(),
         ],
       ],
     );

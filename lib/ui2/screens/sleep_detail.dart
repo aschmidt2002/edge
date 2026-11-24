@@ -226,6 +226,13 @@ class SleepData {
   ///   * [solMin] — sleep-onset latency, and ONLY on a user-set window.
   final double? unobservedMin, awakenings, longestSleepMin, solMin;
 
+  /// Edge+: the cross-day sleep score (`sleep_coach.sleep_score`): `score`
+  /// 0-100 and its four parts `sufficiency_pct`, `consistency_pct`,
+  /// `efficiency_pct`, `stress_pct` (each 0-100, higher is better) plus
+  /// `stress_level`. Any of them may be null; null as a whole when the
+  /// rollup has none. Today's rollup, so only drawn under the latest night.
+  final Map<String, dynamic>? score;
+
   const SleepData({
     this.day,
     this.latestDay,
@@ -244,6 +251,7 @@ class SleepData {
     this.longestSleepMin,
     this.solMin,
     this.deviceNights = const [],
+    this.score,
   });
 
   bool get hasNight => night['duration_min'] is num;
@@ -372,6 +380,7 @@ class SleepData {
     final debtEnv = cd['sleep_debt'];
     final debtH = envValue(debtEnv)?['debt_hours'] as num?;
     final bedEnv = coach is Map ? coach['bedtime'] : null;
+    final scoreMap = envValue(coach is Map ? coach['sleep_score'] : null);
 
     // Personal history for the comparisons. These are `metric_series` reads —
     // one small row per day per key — not day bundles, so the whole comparison
@@ -416,6 +425,7 @@ class SleepData {
       longestSleepMin: longest,
       solMin: sol,
       deviceNights: deviceNights,
+      score: scoreMap == null ? null : Map<String, dynamic>.from(scoreMap),
     );
   }
 }
@@ -851,6 +861,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
 
     final n = d.night;
     final unusual = _unusual(c, p, d, n);
+    final versus = _versusUsual(c, p, d, n);
 
     // The stepper names the night, so the nav bar does not say it twice. With
     // one night on disk there is no stepper, and then the subtitle is the only
@@ -860,10 +871,15 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
         sub: d.days.length < 2 ? dayNavLabel(d.day, l).toUpperCase() : '', [
       ..._nav(_day ?? d.day, d.days, _goDay),
 
-      // ── 1 · THE ANSWER ──
-      _answer(c, p, d, n),
+      // ── 1 · THE ANSWER ── total, when, and the user's say over the window.
+      _answer(c, p, d, n, [
+        ...?_windowCard(c, p, d, n),
+        ..._napsButton(c, l, d.day),
+      ]),
 
-      // ── 2 · THE NIGHT ITSELF ──
+      // ── 2 · THE NIGHT ITSELF ── hypnogram, its shape and the stage split,
+      // one card (Edge+: the Stages section was a second block of the same
+      // figures under its own heading).
       const SizedBox(height: S.x3),
       // Ours, or any paired device's own staging of the same night — shown
       // side by side as alternatives, never merged.
@@ -893,34 +909,25 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       else
         _night(c, p, d, n),
 
-      // ── 2b · WHOSE WINDOW IS THIS ──
-      ...?_windowCard(c, p, d, n),
-      ..._napsButton(c, l, d.day),
-
-      // ── 3 · WHAT IT WAS MADE OF ──
-      Section(l?.sleepDetailStagesSection ?? 'Stages', _stages(c, p, n)),
-
-      // ── 4 · AGAINST THE USER'S OWN NIGHTS ──
-      if (_versusUsual(c, p, d, n) case final versus?)
-        Section(l?.sleepDetailVersusUsualSection ?? 'Against your usual', versus),
-
-      // ── 5 · WHAT STOOD OUT ──
-      // Named after the night the nav bar is already showing. "Unusual last
-      // night — Nothing stood out." is a present-tense all-clear, and it was
-      // printed over a night that could be days old.
-      if (unusual != null)
+      // ── 3 · AGAINST THE USER'S OWN NIGHTS, AND WHAT STOOD OUT ──
+      // One heading for both: an extreme is the far end of the same
+      // comparison.
+      if (versus != null || unusual != null)
         Section(
-            (daysBehind(_noonOf(d.day)) ?? 0) <= 0
-                ? (l?.sleepDetailUnusualLastNight ?? 'Unusual last night')
-                : (l?.sleepDetailUnusualOnDay(prettyDay(d.day, l)) ??
-                    'Unusual on ${prettyDay(d.day, l)}'),
-            unusual),
+            l?.sleepDetailVersusUsualSection ?? 'Against your usual',
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              ?versus,
+              if (unusual != null) ...[
+                const SizedBox(height: S.x3),
+                unusual,
+              ],
+            ])),
 
-      // ── 6 · THE SIGNALS UNDERNEATH ──
-      Section(l?.sleepDetailOvernightSection ?? 'Overnight signals',
-          _overnight(c, p, d)),
+      // ── 4 · THE SIGNALS UNDERNEATH ── titled by its own chart.
+      const SizedBox(height: S.x3),
+      _overnight(c, p, d),
 
-      // ── 7 · ONE TAKEAWAY ──
+      // ── 5 · ONE TAKEAWAY ──
       // Tonight's need, debt and bedtime come from today's cross-day rollup
       // whichever night is selected, so on a past night they are not that
       // night's numbers. The tab carries the full plan in its footer, and
@@ -928,19 +935,25 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       if (d.isLatestNight && !widget.embedded)
         Section(l?.sleepDetailTonightSection ?? 'Tonight', _tonight(c, p, d)),
 
-      const SizedBox(height: S.x5),
+      const SizedBox(height: S.x3),
       // The night this screen is steered to, not the newest one. Dropping it
       // meant stepping back to Tuesday and then tapping Nerd stats landed
       // on last night — the same numbers every time, whichever day you
       // came from.
-      investigateRow(
-          c, () => go(c, Investigate('sleep', day: _day ?? d.day))),
+      // Edge+: the title alone; the subtitle described the door.
+      detailLinkRow(
+          c,
+          LucideIcons.cpu,
+          l?.metricDetailNerdStatsTitle ?? 'Nerd stats',
+          '',
+          () => go(c, Investigate('sleep', day: _day ?? d.day))),
     ]);
   }
 
   /// Total sleep, when it ran, and the two ratios that qualify it. Everything
   /// here is measured; nothing is a judgement.
-  Widget _answer(BuildContext c, P p, SleepData d, Map<String, dynamic> n) {
+  Widget _answer(BuildContext c, P p, SleepData d, Map<String, dynamic> n,
+      [List<Widget> controls = const []]) {
     final l = AppLocalizations.of(c);
     final tst = n['duration_min'] as num?;
     final eff = n['efficiency'] as num?;
@@ -949,31 +962,32 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     final to = clockOfTs(n['wake_ts'] as num?);
     // Wall clock minus the minutes nobody watched. `efficiency_pct` has always
     // divided by this, so on a night with a hole the honest denominator just
-    // read as a worse night unless the screen says which window it is.
+    // read as a worse night unless the screen says which window it is. The
+    // WATCHED column and the "of that" label carry it; Edge+ dropped the
+    // paragraph that said the same in words.
     final unobserved = d.unobservedMin;
     final watched = (inBed == null || unobserved == null || unobserved <= 0)
         ? null
         : math.max(0, inBed - unobserved);
     return Surface(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(hm(tst), style: F.n48.copyWith(color: p.ink)),
-        const SizedBox(height: S.x1),
-        Text(l?.sleepDetailTotalSleep ?? 'Total sleep',
-            style: F.cap.copyWith(color: p.ink3)),
-        if (from.isNotEmpty && to.isNotEmpty) ...[
-          const SizedBox(height: S.x4),
-          Row(children: [
-            Icon(LucideIcons.moon, size: 15, color: p.ink3),
-            const SizedBox(width: S.x2),
-            Flexible(
-              child: Text('$from → $to',
-                  style: F.body
-                      .copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+        Wrap(
+          spacing: S.x3,
+          runSpacing: S.x1,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Semantics(
+              label: l?.sleepDetailTotalSleep ?? 'Total sleep',
+              child: Text(hm(tst), style: F.n48.copyWith(color: p.ink)),
             ),
-          ]),
-        ],
+            if (from.isNotEmpty && to.isNotEmpty)
+              Text('$from – $to',
+                  style: F.body
+                      .copyWith(color: p.ink2, fontWeight: FontWeight.w600)),
+          ],
+        ),
         if (inBed != null || eff != null) ...[
-          const SizedBox(height: S.x4),
+          const SizedBox(height: S.x3),
           InlineMetrics([
             if (inBed != null) (l?.sleepDetailInBed ?? 'IN BED', hm(inBed), C.indigo),
             if (watched != null)
@@ -985,15 +999,85 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
                   _pct(eff * 100), C.green),
           ]),
         ],
-        if (watched != null) ...[
-          const SizedBox(height: S.x3),
-          Text(
-            l?.sleepDetailWatchedExplain(hm(watched), hm(inBed!)) ??
-                'We watched ${hm(watched)} of your ${hm(inBed!)} in bed; the rest '
-                    'is not a measurement. Asleep, and the stage shares below, are out '
-                    'of the time we watched.',
-            style: F.over.copyWith(color: p.ink3, height: 1.5),
-          ),
+        if (d.isLatestNight && d.score != null)
+          ?_sleepScore(c, p, d.score!),
+        ...controls,
+      ]),
+    );
+  }
+
+  /// Edge+: the sleep score and its four parts, one line each as a short
+  /// bar. Nothing at all when the rollup published no score.
+  Widget? _sleepScore(BuildContext c, P p, Map<String, dynamic> m) {
+    num? v(String k) {
+      final x = m[k];
+      return x is num && x.isFinite ? x : null;
+    }
+
+    final score = v('score');
+    final level = switch (m['stress_level']) {
+      'low' => tr(c, 'niedrig', 'low'),
+      'moderate' => tr(c, 'mittel', 'moderate'),
+      'high' => tr(c, 'hoch', 'high'),
+      _ => null,
+    };
+    final parts = <(String, num?, String?)>[
+      (tr(c, 'Schlafmenge', 'Sufficiency'), v('sufficiency_pct'), null),
+      (tr(c, 'Regelmäßigkeit', 'Consistency'), v('consistency_pct'), null),
+      (tr(c, 'Effizienz', 'Efficiency'), v('efficiency_pct'), null),
+      (tr(c, 'Stress', 'Stress'), v('stress_pct'), level),
+    ].where((e) => e.$2 != null || e.$3 != null).toList();
+    if (score == null && parts.isEmpty) return null;
+    Color ink(num pct) =>
+        p.on(pct >= 85 ? C.green : (pct >= 70 ? C.yellow : C.orange));
+    return Padding(
+      padding: const EdgeInsets.only(top: S.x4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Divider(color: p.line, height: 1),
+        const SizedBox(height: S.x3),
+        if (score != null)
+          Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text('${score.round()}',
+                    style: F.n34.copyWith(color: ink(score))),
+                const SizedBox(width: S.x2),
+                Flexible(
+                  child: Text(tr(c, 'Sleep Score', 'Sleep score'),
+                      style: F.cap.copyWith(color: p.ink3)),
+                ),
+              ]),
+        for (final (label, pct, text) in parts) ...[
+          const SizedBox(height: S.x2),
+          Row(children: [
+            Expanded(
+              flex: 5,
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: F.cap.copyWith(color: p.ink2)),
+            ),
+            const SizedBox(width: S.x2),
+            Expanded(
+              flex: 4,
+              child: pct == null
+                  ? const SizedBox.shrink()
+                  : ClipRRect(
+                      borderRadius: R.rPill,
+                      child: LinearProgressIndicator(
+                        value: (pct / 100).clamp(0.0, 1.0).toDouble(),
+                        minHeight: 6,
+                        backgroundColor: p.track,
+                        color: ink(pct),
+                      ),
+                    ),
+            ),
+            const SizedBox(width: S.x2),
+            Text(text ?? '${pct!.round()} %',
+                style: F.cap.copyWith(
+                    color: p.ink, fontWeight: FontWeight.w600)),
+          ]),
         ],
       ]),
     );
@@ -1050,105 +1134,92 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     // loading that is still the night the user stepped away from, not the
     // date the stepper reads, the same reason the naps button waits.
     final locked = busy || _loading;
+    // Inside the answer card, not a card of its own (Edge+). The ordinary
+    // case, a window staged from the signals, says nothing: the buttons are
+    // the whole story. Only a window that is NOT the usual automatic one gets
+    // a one-line tag saying whose it is.
+    final tag = mine
+        ? (l?.sleepDetailWindowMine ?? 'You set this window')
+        : fallback
+            ? (l?.sleepDetailWindowFallback ??
+                'This window was inferred from heart rate')
+            : vendor
+                ? (l?.sleepDetailStagedByRing ?? 'Staged by your device')
+                : null;
     return [
       const SizedBox(height: S.x3),
-      Surface(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(mine ? LucideIcons.userCheck : LucideIcons.wandSparkles,
-                size: 16, color: p.ink3),
-            const SizedBox(width: S.x2),
-            Expanded(
-              child: Text(
-                mine
-                    ? (l?.sleepDetailWindowMine ?? 'You set this window')
-                    : fallback
-                        ? (l?.sleepDetailWindowFallback ??
-                            'This window was inferred from heart rate')
-                        : vendor
-                        ? (l?.sleepDetailStagedByRing ?? 'Staged by your device')
-                        : (l?.sleepDetailWindowAuto ??
-                            'This window was staged from the signals'),
-                style: F.body.copyWith(color: p.ink),
-              ),
-            ),
-          ]),
-          if (fallback) ...[
-            const SizedBox(height: S.x2),
-            Text(
-              l?.sleepDetailWindowFallbackBody ??
-                  'Staging could not find the edges, so the times are a best '
-                      'guess.',
-              style: F.cap.copyWith(color: p.ink3),
-            ),
-          ],
-          // SLP-02 — settling time, and ONLY here. On the auto path the window
-          // is built from stillness gated on a sleep-ish heart rate, so it
-          // cannot begin before you are already lying quiet: the 40 minutes of
-          // tossing falls outside it and the latency would come out near zero.
-          // On a window the user asserted, the number means what people think
-          // it means. The pipeline abstains for both reasons; this only draws
-          // what it published.
-          if (mine && d.solMin != null) ...[
-            const SizedBox(height: S.x2),
-            Text(
-              l?.sleepDetailWindowSol(_solBand(c, d.solMin!)) ??
-                  'From the start of your window to asleep: '
-                      '${_solBand(c, d.solMin!)}.',
-              style: F.cap.copyWith(color: p.ink3),
-            ),
-          ],
-          const SizedBox(height: S.x2),
-          // No buttons when uncorrectable; the note says why: pruned
-          // recordings, or (imported, never worn) nothing to re-analyse.
-          if (!_correctable)
-            _recordingsPruned
-                ? _uncorrectableNote(c, l)
-                : _noRecordingsNote(c, l)
-          else
-          Wrap(spacing: S.x2, children: [
-            if (fallback && _confirmable)
-              TextButton(
-                onPressed: locked ? null : () => _confirmWindow(day),
-                child: Text(l?.sleepDetailConfirmTimes ?? 'These times are right'),
-              ),
-            TextButton(
-              onPressed: locked ? null : () => _editWindow(day, t0, t1),
-              child: Text(mine
-                  ? (l?.sleepDetailChangeTimes ?? 'Change the times')
-                  : (l?.sleepDetailSetTimesMyself ?? 'Set the times myself')),
-            ),
-            if (mine && _wholeNightKept)
-              TextButton(
-                onPressed: locked ? null : () => _clearWindow(day),
-                child:
-                    Text(l?.sleepDetailBackToAutomatic ?? 'Back to automatic'),
-              ),
-            // The missing third answer next to "Looks right"/"Edit": naps
-            // already have a reject action (sleep_nap source='rejected');
-            // a whole-night main-sleep session didn't (edge#248).
-            TextButton(
-              onPressed: locked ? null : () => _rejectWindow(day),
-              child: Text(l?.sleepDetailNotSleep ?? 'Not sleep'),
-            ),
-          ]),
-          if (_correctable && !_wholeNightKept) _eveningPrunedNote(c, l),
-          if (busy) ...[
-            const SizedBox(height: S.x2),
-            Text(l?.sleepDetailReanalysing ?? 'Re-analysing the night…',
-                style: F.cap.copyWith(color: p.ink3)),
-          ],
-          if (!busy && _overrideFailed != null) ...[
-            const SizedBox(height: S.x3),
-            StatusCard(
-              l?.sleepDetailCorrectionFailedTitle ??
-                  'That correction has not been applied',
-              _overrideFailed!,
-              icon: LucideIcons.triangleAlert,
-            ),
-          ],
+      Divider(color: p.line, height: 1),
+      if (tag != null) ...[
+        const SizedBox(height: S.x3),
+        Row(children: [
+          Icon(mine ? LucideIcons.userCheck : LucideIcons.wandSparkles,
+              size: 15, color: p.ink3),
+          const SizedBox(width: S.x2),
+          Expanded(
+            child: Text(tag, style: F.cap.copyWith(color: p.ink2)),
+          ),
         ]),
-      ),
+      ],
+      // SLP-02 — settling time, and ONLY here. On the auto path the window
+      // is built from stillness gated on a sleep-ish heart rate, so it
+      // cannot begin before you are already lying quiet: the 40 minutes of
+      // tossing falls outside it and the latency would come out near zero.
+      // On a window the user asserted, the number means what people think
+      // it means. The pipeline abstains for both reasons; this only draws
+      // what it published.
+      if (mine && d.solMin != null) ...[
+        const SizedBox(height: S.x1),
+        Text(
+          l?.sleepDetailWindowSol(_solBand(c, d.solMin!)) ??
+              'From the start of your window to asleep: '
+                  '${_solBand(c, d.solMin!)}.',
+          style: F.cap.copyWith(color: p.ink3),
+        ),
+      ],
+      const SizedBox(height: S.x1),
+      // No buttons when uncorrectable; the note says why: pruned
+      // recordings, or (imported, never worn) nothing to re-analyse.
+      if (!_correctable)
+        _recordingsPruned ? _uncorrectableNote(c, l) : _noRecordingsNote(c, l)
+      else
+        Wrap(spacing: S.x1, children: [
+          if (fallback && _confirmable)
+            TextButton(
+              onPressed: locked ? null : () => _confirmWindow(day),
+              child: Text(l?.sleepDetailConfirmTimes ?? 'These times are right'),
+            ),
+          TextButton(
+            onPressed: locked ? null : () => _editWindow(day, t0, t1),
+            child: Text(mine
+                ? (l?.sleepDetailChangeTimes ?? 'Change the times')
+                : (l?.sleepDetailSetTimesMyself ?? 'Set the times myself')),
+          ),
+          if (mine && _wholeNightKept)
+            TextButton(
+              onPressed: locked ? null : () => _clearWindow(day),
+              child: Text(l?.sleepDetailBackToAutomatic ?? 'Back to automatic'),
+            ),
+          // The missing third answer next to "Looks right"/"Edit": naps
+          // already have a reject action (sleep_nap source='rejected');
+          // a whole-night main-sleep session didn't (edge#248).
+          TextButton(
+            onPressed: locked ? null : () => _rejectWindow(day),
+            child: Text(l?.sleepDetailNotSleep ?? 'Not sleep'),
+          ),
+        ]),
+      if (_correctable && !_wholeNightKept) _eveningPrunedNote(c, l),
+      if (busy)
+        Text(l?.sleepDetailReanalysing ?? 'Re-analysing the night…',
+            style: F.cap.copyWith(color: p.ink3)),
+      if (!busy && _overrideFailed != null) ...[
+        const SizedBox(height: S.x3),
+        StatusCard(
+          l?.sleepDetailCorrectionFailedTitle ??
+              'That correction has not been applied',
+          _overrideFailed!,
+          icon: LucideIcons.triangleAlert,
+        ),
+      ],
     ];
   }
 
@@ -1388,47 +1459,53 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     final scaler = MediaQuery.textScalerOf(c);
     final lane = math.max(33.0, scaler.scale(F.over.fontSize!) * F.over.height! + 8);
     final totals = _stageTotals(device ?? n, device: device != null);
+    final w = d.awakenings?.round();
+    final longest = d.longestSleepMin;
+    // The night's shape as three numbers instead of two sentences (Edge+).
+    // The wake-up count is a FLOOR — our stager sees sustained wake of 5 min
+    // or more, never the 3-15 s arousals a PSG counts — so it reads "≥ n".
+    final shape = <(String, String, Color)>[
+      if (cycles > 0)
+        (tr(c, 'ZYKLEN', 'CYCLES'),
+            mean == null ? '$cycles' : '$cycles · ${hm(mean)}', C.purple),
+      if (w != null) (tr(c, 'AUFGEWACHT', 'WAKE-UPS'), w == 0 ? '0' : '≥ $w', C.orange),
+      if (longest != null) (tr(c, 'AM STÜCK', 'LONGEST'), hm(longest), C.blue),
+    ];
     return Surface(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        ChartFrame(
-          title: l?.sleepDetailThroughTheNight ?? 'Through the night',
-          unit: l?.sleepDetailUnitStage ?? 'stage',
-          height: lane * 4,
-          xLabels: [
-            clockOfTs(t0),
-            if (t0 != null && t1 != null && t1 > t0)
-              clockOfTs(t0 + (t1 - t0) ~/ 2),
-            clockOfTs(t1),
+      child: LayoutBuilder(builder: (c, box) {
+        final withTotals = _totalsFit(c, box.maxWidth, stages, totals);
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          ChartFrame(
+            title: l?.sleepDetailStagesSection ?? 'Stages',
+            unit: l?.sleepDetailUnitStage ?? 'stage',
+            height: lane * 4,
+            xLabels: [
+              clockOfTs(t0),
+              if (t0 != null && t1 != null && t1 > t0)
+                clockOfTs(t0 + (t1 - t0) ~/ 2),
+              clockOfTs(t1),
+            ],
+            child: _labelledHypnogram(
+                c, p, d, stages, n, lane, withTotals ? totals : const {}),
+          ),
+          // The figures the chart had no room to print beside its lanes.
+          if (!withTotals && totals.isNotEmpty) ...[
+            const SizedBox(height: S.x3),
+            _stageList(c, p, totals),
           ],
-          child: _labelledHypnogram(c, p, d, stages, n, lane, totals),
-        ),
-        _scrubPanel(c, p, d, n),
-        if (device != null) ..._deviceStaging(c, p, device),
-        // Not our staging: say whose it is, wherever it is drawn.
-        if (device == null && n['sleep_source'] == 'vendor_staged') ...[
-          const SizedBox(height: S.x2),
-          Pill(l?.sleepDetailStagedByRing ?? 'Staged by your device', C.n500),
-        ],
-        const SizedBox(height: S.x2),
-        Text(
-          cycles > 0
-              ? (mean == null
-                  ? (l?.sleepDetailTapDragCycles(cycles) ??
-                      'Tap or drag the chart for any moment. $cycles '
-                          '${cycles == 1 ? 'cycle' : 'cycles'}.')
-                  : (l?.sleepDetailTapDragCyclesAvg(cycles, hm(mean)) ??
-                      'Tap or drag the chart for any moment. $cycles '
-                          '${cycles == 1 ? 'cycle' : 'cycles'}, ${hm(mean)} '
-                          'on average.'))
-              : (l?.sleepDetailTapDragNone ??
-                  'Tap or drag the chart for any moment of the night.'),
-          style: F.over.copyWith(color: p.ink3, height: 1.5),
-        ),
-        if (_shape(c, d) case final shape?) ...[
-          const SizedBox(height: S.x2),
-          Text(shape, style: F.over.copyWith(color: p.ink3, height: 1.5)),
-        ],
-      ]),
+          _scrubPanel(c, p, d, n),
+          if (device != null) ..._deviceStaging(c, p, device),
+          // Not our staging: say whose it is, wherever it is drawn.
+          if (device == null && n['sleep_source'] == 'vendor_staged') ...[
+            const SizedBox(height: S.x2),
+            Pill(l?.sleepDetailStagedByRing ?? 'Staged by your device', C.n500),
+          ],
+          if (shape.isNotEmpty) ...[
+            const SizedBox(height: S.x4),
+            InlineMetrics(shape),
+          ],
+        ]);
+      }),
     );
   }
 
@@ -1477,34 +1554,6 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
         ),
       ],
     ];
-  }
-
-  /// The shape of the night in one line — how broken it was, and the longest
-  /// piece of it. Null when the pipeline published neither.
-  ///
-  /// The count is a FLOOR and says so: our stager sees sustained wake, and the
-  /// 3-15 s cortical arousals a PSG counts are invisible to a 1 Hz wrist, so the
-  /// true number is higher than this one. Five minutes is a choice, not
-  /// physiology, so it is stated rather than assumed. No arousal index, no
-  /// explanation, only the shape.
-  String? _shape(BuildContext c, SleepData d) {
-    final l = AppLocalizations.of(c);
-    final w = d.awakenings?.round();
-    final longest = d.longestSleepMin;
-    final parts = [
-      if (w != null)
-        w == 0
-            ? (l?.sleepDetailNoWakeups ??
-                'No wake-ups of 5 minutes or more; shorter ones are invisible to '
-                    'a wrist.')
-            : (l?.sleepDetailAtLeastWakeups(w) ??
-                'At least $w wake-up${w == 1 ? '' : 's'} of 5 minutes or more; '
-                    'shorter ones are invisible to a wrist.'),
-      if (longest != null)
-        l?.sleepDetailLongestStretch(hm(longest)) ??
-            'Longest unbroken stretch ${hm(longest)}.',
-    ];
-    return parts.isEmpty ? null : parts.join(' ');
   }
 
   /// The night split into stretches we watched and holes we did not:
@@ -1824,9 +1873,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       final nameW = math.min(
           widest(SleepStage.values.map(name), nameStyle), w * _nameShare);
       final totW = widest(totals.values, F.over);
-      final withTotals = !bigText(c) &&
-          totals.isNotEmpty &&
-          w - nameW - totW - 2 * S.x2 >= w * _minPlotShare;
+      final withTotals = totals.isNotEmpty;
       return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Spoken by the totals column, or by the scrubber's own readout.
         ExcludeSemantics(child: column(name, nameW, coloured: true)),
@@ -1845,6 +1892,74 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
         ],
       ]);
     });
+  }
+
+  /// Whether the stage totals fit beside the lanes at [w]: never above the
+  /// big-text threshold, and only while the plot keeps [_minPlotShare].
+  bool _totalsFit(BuildContext c, double w, List<SleepStage?> stages,
+      Map<SleepStage, String> totals) {
+    if (bigText(c) || totals.isEmpty) return false;
+    final l = AppLocalizations.of(c);
+    final scaler = MediaQuery.textScalerOf(c);
+    final dir = Directionality.of(c);
+    double widest(Iterable<String> ts, TextStyle st) {
+      var m = 0.0;
+      for (final t in ts) {
+        final tp = TextPainter(
+            text: TextSpan(text: t, style: st),
+            textScaler: scaler,
+            textDirection: dir,
+            maxLines: 1)
+          ..layout();
+        m = math.max(m, tp.width);
+        tp.dispose();
+      }
+      return m.ceilToDouble();
+    }
+
+    final names = [
+      for (final s in SleepStage.values)
+        if (totals[s] != null || stages.contains(s)) s.label(l),
+    ];
+    final nameW = math.min(
+        widest(names, F.over.copyWith(fontWeight: FontWeight.w600)),
+        w * _nameShare);
+    final totW = widest(totals.values, F.over);
+    return w - nameW - totW - 2 * S.x2 >= w * _minPlotShare;
+  }
+
+  /// The stage figures as one wrapped line of swatches, for when the chart
+  /// cannot carry them beside its lanes.
+  Widget _stageList(
+      BuildContext c, P p, Map<SleepStage, String> totals) {
+    final l = AppLocalizations.of(c);
+    final ink = Hypnogram.cols(p);
+    return Wrap(spacing: S.x4, runSpacing: S.x2, children: [
+      for (final s in const [
+        SleepStage.deep,
+        SleepStage.rem,
+        SleepStage.light,
+        SleepStage.awake,
+      ])
+        if (totals[s] case final v?)
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+                width: 8,
+                height: 8,
+                decoration:
+                    BoxDecoration(color: ink[s], shape: BoxShape.circle)),
+            const SizedBox(width: S.x2),
+            Flexible(
+                child: Text(s.label(l),
+                    style: F.cap.copyWith(color: p.ink2))),
+            const SizedBox(width: S.x1),
+            Flexible(
+              child: Text(v,
+                  style: F.cap
+                      .copyWith(color: p.ink, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+    ]);
   }
 
   /// What each stage came to, as the Stages table prints it: a device's own
@@ -1878,107 +1993,6 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     };
   }
 
-  /// One stage of the night: a name and what it came to. The value is one
-  /// string — the range for a staged figure, a plain duration for Awake — so
-  /// the column has ONE right edge down the whole table. It is `Flexible`
-  /// rather than fixed because "1h 15m–2h 30m" is twice the width the old
-  /// minutes column was sized for; above the big-text threshold the row
-  /// restacks rather than squeeze, exactly like [MetricRow].
-  Widget _stageRow(BuildContext c, P p, (String, String, Color) s) {
-    final dot = Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: s.$3, shape: BoxShape.circle));
-    final name = Text(s.$1, style: F.body.copyWith(color: p.ink));
-    final value = Text(s.$2,
-        textAlign: TextAlign.right,
-        style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600));
-    if (!bigText(c)) {
-      return Row(children: [
-        dot,
-        const SizedBox(width: S.x3),
-        Expanded(child: name),
-        const SizedBox(width: S.x3),
-        Flexible(child: value),
-      ]);
-    }
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      dot,
-      const SizedBox(width: S.x3),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          name,
-          const SizedBox(height: S.x1),
-          Text(s.$2, style: F.cap.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
-        ]),
-      ),
-    ]);
-  }
-
-  /// SLP-13 — the stage block, as ranges.
-  ///
-  /// The share column is GONE and that is the point. A percentage is computed
-  /// from the exact minute count, so printing "19%" beside "45m–1h 15m" would
-  /// have restored, on the same row, the precision the range exists to retire.
-  /// Nothing is lost that the range does not carry better.
-  ///
-  /// Awake keeps a single figure. It is not one of the three the overlay splits
-  /// — asleep-versus-awake is a different decision with a different weakness,
-  /// already stated where the awakening count is, and `stageIntervals` publishes
-  /// no interval for it. Inventing one here would be exactly the fabricated
-  /// precision this item removes.
-  Widget _stages(BuildContext c, P p, Map<String, dynamic> n) {
-    final l = AppLocalizations.of(c);
-    // A device-staged night: the device counted its stages, so its own
-    // minutes, not our estimator's ranges.
-    final r = n['sleep_source'] == 'vendor_staged' ? null : _ranges(n);
-    // The same figures, and the same colours, as the lanes on the chart.
-    final totals = _stageTotals(n);
-    final ink = Hypnogram.cols(P.of(c));
-    final rows = <(String, String, Color)>[
-      for (final s in const [
-        SleepStage.deep,
-        SleepStage.rem,
-        SleepStage.light,
-        SleepStage.awake,
-      ])
-        if (totals[s] case final v?) (s.label(l), v, ink[s]!),
-    ];
-    if (rows.isEmpty) {
-      return StatusCard(
-        l?.sleepDetailNoStageSplitTitle ?? 'No stage split for this night',
-        l?.sleepDetailNoStageSplitBody ??
-            'No beat timing across the whole window.',
-        icon: LucideIcons.chartNoAxesColumn,
-      );
-    }
-    return Column(children: [
-      Surface(
-        pad: const EdgeInsets.symmetric(horizontal: S.x4),
-        child: Column(children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) Divider(color: p.line, height: 1),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: S.x3),
-              child: _stageRow(c, p, rows[i]),
-            ),
-          ],
-        ]),
-      ),
-      if (r != null) ...[
-        const SizedBox(height: S.x2),
-        // The range IS the reading, and the copy says so straight. A wrist
-        // infers stages from beat timing and movement; it does not count them.
-        // The width is this night's own — better coverage, narrower range —
-        // rather than one published figure applied to every night.
-        Text(
-            l?.sleepDetailStageRangeExplain ??
-                'Each stage is a range, narrower the better we saw the night. Deep is the widest; awake is one figure. Nerd stats has exact counts.',
-            style: F.over.copyWith(color: p.ink3, height: 1.5)),
-      ],
-    ]);
-  }
-
   // ── AGAINST YOUR USUAL ────────────────────────────────────────────────────
 
   /// The four comparisons that used to be five progress bars against invented
@@ -1998,7 +2012,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     final tst = (n['duration_min'] as num?)?.toDouble();
     if (tst != null) {
       rows.add(_Compare(
-        label: l?.sleepDetailAskEnough ?? 'Did you sleep enough?',
+        label: tr(c, 'Dauer', 'Duration'),
         value: hm(tst),
         tonight: tst,
         history: d.tstHistory,
@@ -2022,7 +2036,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       // The device's own count: no estimator interval to blur it by.
       final deep = (n['deep_min'] as num).toDouble();
       rows.add(_Compare(
-        label: l?.sleepDetailAskDeep ?? 'Did you get your usual deep sleep?',
+        label: tr(c, 'Tiefschlaf', 'Deep sleep'),
         value: hm(deep),
         tonight: deep,
         history: d.deepHistory,
@@ -2035,7 +2049,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     } else if (deepRange != null) {
       final deep = deepRange.pointSec / 60;
       rows.add(_Compare(
-        label: l?.sleepDetailAskDeep ?? 'Did you get your usual deep sleep?',
+        label: tr(c, 'Tiefschlaf', 'Deep sleep'),
         value: _rangeText(deepRange),
         tonight: deep,
         blur: (deepRange.hiSec - deepRange.loSec) / 120,
@@ -2051,8 +2065,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     final eff = (n['efficiency'] as num?)?.toDouble();
     if (eff != null) {
       rows.add(_Compare(
-        label: l?.sleepDetailAskSleptThrough ??
-            'Did you sleep through your time in bed?',
+        label: tr(c, 'Effizienz', 'Efficiency'),
         value: _pct(eff * 100),
         tonight: eff * 100,
         history: d.effHistory,
@@ -2073,8 +2086,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
     if (onset != null && d.onsetHistory.isNotEmpty) {
       final rel = [for (final o in d.onsetHistory) _relMinutes(o, onset)];
       rows.add(_Compare(
-        label: l?.sleepDetailAskOnTime ??
-            'Did you fall asleep at your usual time?',
+        label: tr(c, 'Eingeschlafen', 'Asleep at'),
         value: clockOfTs(onset),
         tonight: 0,
         history: rel,
@@ -2107,21 +2119,16 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       );
     }
 
-    return Column(children: [
-      Surface(
-        child: Column(children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) const SizedBox(height: S.x5),
-            rows[i],
-          ],
-        ]),
-      ),
-      const SizedBox(height: S.x2),
-      Text(
-          l?.sleepDetailBarExplain ??
-              'The bar is the middle half of your own nights.',
-          style: F.over.copyWith(color: p.ink3, height: 1.5)),
-    ]);
+    // Edge+: no footnote on what the bar is; the verdict under each strip
+    // names the usual range in numbers.
+    return Surface(
+      child: Column(children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: S.x4),
+          rows[i],
+        ],
+      ]),
+    );
   }
 
   /// Signed minutes from [ref] to [t], as times of day, wrapped to ±12 h.
@@ -2230,19 +2237,11 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
       // Only claim "nothing unusual" once there is enough history to have
       // looked. Before that the section is absent rather than reassuring from
       // no evidence — and the section above has already said why.
-      if (d.tstHistory.length < _recordNights) return null;
-      return Surface(
-        color: p.card2,
-        elevation: 0,
-        child: Row(children: [
-          Icon(LucideIcons.check, size: 16, color: p.on(C.green)),
-          const SizedBox(width: S.x3),
-          Expanded(
-            child: Text(l?.sleepDetailNothingStoodOut ?? 'Nothing stood out.',
-                style: F.cap.copyWith(color: p.ink2, height: 1.5)),
-          ),
-        ]),
-      );
+      //
+      // Edge+: and after it, absent too. The verdicts on the comparison
+      // above already say "typical", so an all-clear card was the same
+      // answer a second time.
+      return null;
     }
 
     return Column(children: [
@@ -2437,7 +2436,7 @@ class _SleepDetailState extends State<SleepDetail> with RevisionReload {
           const SizedBox(height: S.x5),
         ],
         ChartFrame(
-          title: loc?.sleepDetailThroughTheNight ?? 'Through the night',
+          title: loc?.sleepDetailOvernightSection ?? 'Overnight signals',
           unit: units.join(' · '),
           height: 44.0 * series.length + 20,
           xLabels: [
@@ -2621,7 +2620,7 @@ class _Compare extends StatelessWidget {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       head,
-      const SizedBox(height: S.x3),
+      const SizedBox(height: S.x2),
       _Strip(
           lo: lo,
           hi: hi,
@@ -2631,10 +2630,8 @@ class _Compare extends StatelessWidget {
           color: color),
       const SizedBox(height: S.x2),
       Text(
-          l?.sleepDetailVerdictSummary(
-                  verdict, fmt(band.lo), fmt(band.hi), band.n) ??
-              '$verdict · usual ${fmt(band.lo)}–${fmt(band.hi)} over ${band.n} '
-                  'nights',
+          tr(c, '$verdict · üblich ${fmt(band.lo)}–${fmt(band.hi)}',
+              '$verdict · usual ${fmt(band.lo)}–${fmt(band.hi)}'),
           style: F.over.copyWith(color: p.ink3, height: 1.5)),
     ]);
   }

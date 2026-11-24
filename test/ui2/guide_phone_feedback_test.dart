@@ -3,7 +3,7 @@
 //
 // Also an opt-in screenshot capture (GUIDE_RERENDER_DIR): 412x915, dpr 2.625, real fonts, dark, en. Not a golden.
 import 'package:flutter/material.dart'; import 'package:flutter_test/flutter_test.dart';
-import 'package:openstrap_edge/ui2/grammar.dart' show Section, Surface; import 'package:openstrap_edge/ui2/guides/guide.dart';
+import 'package:openstrap_edge/ui2/grammar.dart' show Surface; import 'package:openstrap_edge/ui2/guides/guide.dart';
 import 'package:openstrap_edge/ui2/guides/guide_catalogue.dart'; import 'package:openstrap_edge/ui2/guides/guide_run.dart';
 import 'package:openstrap_edge/ui2/guides/guide_runner.dart'; import 'package:openstrap_edge/ui2/guides/guide_target.dart';
 import 'package:openstrap_edge/l10n/app_localizations.dart'; import 'package:openstrap_edge/ui2/guides/live_guide_overlay.dart';
@@ -53,7 +53,7 @@ void main() { TestWidgetsFlutterBinding.ensureInitialized(); setUpAll(() async {
     await _start(t, 'heart-rate-zones', key); final o = _overlay(t); final ring = t.getRect(find.ancestor(of: find.text('STRAIN'), matching: find.byType(Surface)).last);
     expect(look(o, ring), 'lit', reason: 'the target\'s own card');
     final review = t.getRect(find.ancestor(of: find.text('Detected activities'), matching: find.byType(Surface)).last); expect(look(o, review), 'dim'); });
-  // WHY: main's window-edit Surface is the target card; Stages is a later Section. They must use the same card-window rule as the other screens.
+  // WHY: the answer card holds the window edit actions and is the target; the next card below it (Edge+: the Stages chart, no Section of its own) is dimmed. They must use the same card-window rule as the other screens.
   // # catches: dimming the edit action, nested dims or leaving the next section lit.
   testWidgets('fix-sleep-times step 1 on Sleep: window card lit and Stages dimmed', (t) async { final key = GlobalKey();
     await _start(t, 'fix-sleep-times', key); final o = _overlay(t); final targetText = find.text('Set the times myself');
@@ -61,4 +61,4 @@ void main() { TestWidgetsFlutterBinding.ensureInitialized(); setUpAll(() async {
     expect(ownFinder, findsWidgets, reason: 'main renders the edit action inside its window Surface');
     final own = t.getRect(ownFinder.last); expect(look(o, own), 'lit'); for (final title in ['Not sleep']) {
       expect(_over(o, t.getRect(find.text(title).first).deflate(1)), isEmpty, reason: '$title is in the target\'s card'); }
-    final next = t.getRect(find.ancestor(of: find.text('Stages'), matching: find.byType(Section)).first); expect(look(o, next), 'dim'); }); }
+    final next = find.byType(Surface).evaluate().map((e) => t.getRect(find.byWidget(e.widget))).firstWhere((r) => r.top >= own.bottom && r.height > 0); expect(look(o, next), 'dim'); }); }

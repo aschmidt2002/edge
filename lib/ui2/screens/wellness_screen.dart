@@ -498,8 +498,6 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
     final coach = _insights['sleep_coach'];
     final coachMap = coach is Map ? coach.cast<String, dynamic>() : null;
     final needSec = _nested(coachMap, 'need', 'need_sec');
-    final bedMin = _nested(coachMap, 'bedtime', 'bedtime_min_of_day');
-    final wakeMin = _nested(coachMap, 'wake', 'wake_min_of_day');
     final napMin = _reading(coachMap?['nap_credit_min']);
     final strainMin = _reading(coachMap?['strain_bonus_min']);
     final debtH = _nested(_insights, 'sleep_debt', 'debt_hours');
@@ -513,39 +511,58 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // The one recommendation on this screen, and only when all three of
-        // its inputs are real: a measured debt worth acting on, a learned need,
-        // and a target bedtime to name. No debt, no card — the widget does not
-        // get an invented reason so that it can appear.
-        if (debtH != null && debtH >= .75 && needSec != null && bedMin != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: S.x5),
-            child: Recommendation(
-              l?.wellnessTurnInBy(formatMinuteOfDay(bedMin.round())) ??
-                  'Turn in by ${formatMinuteOfDay(bedMin.round())}',
-              l?.wellnessDebtBody(_hm(debtH * 60), _hm(needSec / 60)) ??
-                  'You are ${_hm(debtH * 60)} down against your own need, and '
-                      'tonight\'s is ${_hm(needSec / 60)}.',
-              l?.wellnessSeeWhatLastNightCost ?? 'See what last night cost you',
-              color: C.indigo,
-              // This plan only ever renders as the Sleep tab's footer, under
-              // last night. Pushing SleepDetail opened a second copy of the
-              // screen already underneath, so go back up to the night instead.
-              onTap: () {
-                final pos = Scrollable.maybeOf(c)?.position;
-                if (pos == null) return;
-                // Reduced motion hands back a zero duration, and a scroll
-                // animation asserts on one — jump instead.
-                final d = motion(c, Motion.slow);
-                if (d == Duration.zero) {
-                  pos.jumpTo(pos.minScrollExtent);
-                } else {
-                  unawaited(pos.animateTo(pos.minScrollExtent,
-                      duration: d, curve: Curves.easeOut));
-                }
-              },
-            ),
-          ),
+        // Edge+: under the tab's "Tonight" heading, so no heading of its own.
+        needSec == null && stale != null
+            ? staleInsightsCard(stale, syncOf(c), l)!
+            : needSec == null
+            // The coach's own reason for the absent need — it names the
+            // input that is actually missing. "Not enough of them yet" named
+            // nothing, and was printed for every cause the estimator has.
+            ? StatusCard(
+                l?.wellnessNoSleepNeedTitle ?? 'No sleep need yet',
+                whyFromNote(_noteOf(coachMap?['need'])) ??
+                    (l?.wellnessNoSleepNeedBody ??
+                        'Nothing recorded says why there is no need for '
+                            'tonight.'),
+                icon: LucideIcons.bedDouble,
+              )
+            : Surface(
+                child: Column(
+                  children: [
+                    MetricRow(
+                      LucideIcons.bedDouble,
+                      C.blue,
+                      l?.wellnessTonightsNeed ?? 'Tonight\'s need',
+                      _hm(needSec / 60),
+                    ),
+                    // Null here means "we do not know", which is why it is a
+                    // missing row rather than "+0 min".
+                    if (debtH != null)
+                      MetricRow(
+                        LucideIcons.trendingDown,
+                        C.orange,
+                        l?.wellnessSleepDebt ?? 'Sleep debt',
+                        _hm(debtH * 60),
+                      ),
+                    if (strainMin != null)
+                      MetricRow(
+                        LucideIcons.flame,
+                        C.purple,
+                        l?.wellnessAddedForStrain ?? 'Added for strain',
+                        '${strainMin.round()}',
+                        unit: 'min',
+                      ),
+                    if (napMin != null)
+                      MetricRow(
+                        LucideIcons.sun,
+                        C.yellow,
+                        l?.wellnessCreditedFromNaps ?? 'Credited from naps',
+                        '${napMin.round()}',
+                        unit: 'min',
+                      ),
+                  ],
+                ),
+              ),
         Section(
           l?.wellnessWhatChargedAndDrained ?? 'What charged and drained you',
           // Two words and a full stop, before: "hrv", "rhr". No reading, no
@@ -564,74 +581,6 @@ class _WellnessScreenState extends State<WellnessScreen> with RevisionReload {
                   icon: LucideIcons.sparkles,
                 )
               : DriverBreakdown(_drivers),
-        ),
-        Section(
-          l?.wellnessSleepNeedTonight ?? 'Sleep need tonight',
-          needSec == null && stale != null
-              ? staleInsightsCard(stale, syncOf(c), l)!
-              : needSec == null
-              // The coach's own reason for the absent need — it names the
-              // input that is actually missing. "Not enough of them yet" named
-              // nothing, and was printed for every cause the estimator has.
-              ? StatusCard(
-                  l?.wellnessNoSleepNeedTitle ?? 'No sleep need yet',
-                  whyFromNote(_noteOf(coachMap?['need'])) ??
-                      (l?.wellnessNoSleepNeedBody ??
-                          'Nothing recorded says why there is no need for '
-                              'tonight.'),
-                  icon: LucideIcons.bedDouble,
-                )
-              : Surface(
-                  child: Column(
-                    children: [
-                      MetricRow(
-                        LucideIcons.bedDouble,
-                        C.blue,
-                        l?.wellnessTonightsNeed ?? 'Tonight\'s need',
-                        _hm(needSec / 60),
-                      ),
-                      // Null here means "we do not know", which is why it is a
-                      // missing row rather than "+0 min".
-                      if (debtH != null)
-                        MetricRow(
-                          LucideIcons.trendingDown,
-                          C.orange,
-                          l?.wellnessSleepDebt ?? 'Sleep debt',
-                          _hm(debtH * 60),
-                        ),
-                      if (strainMin != null)
-                        MetricRow(
-                          LucideIcons.flame,
-                          C.purple,
-                          l?.wellnessAddedForStrain ?? 'Added for strain',
-                          '${strainMin.round()}',
-                          unit: 'min',
-                        ),
-                      if (napMin != null)
-                        MetricRow(
-                          LucideIcons.sun,
-                          C.yellow,
-                          l?.wellnessCreditedFromNaps ?? 'Credited from naps',
-                          '${napMin.round()}',
-                          unit: 'min',
-                        ),
-                      if (bedMin != null)
-                        MetricRow(
-                          LucideIcons.moon,
-                          C.indigo,
-                          l?.wellnessTargetBedtime ?? 'Target bedtime',
-                          formatMinuteOfDay(bedMin.round()),
-                        ),
-                      if (wakeMin != null)
-                        MetricRow(
-                          LucideIcons.sunrise,
-                          C.orange,
-                          l?.wellnessTargetWake ?? 'Target wake',
-                          formatMinuteOfDay(wakeMin.round()),
-                        ),
-                    ],
-                  ),
-                ),
         ),
       ],
     );

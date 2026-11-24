@@ -41,6 +41,7 @@ import '../../state/units_controller.dart';
 import '../charts.dart';
 import '../grammar.dart';
 import '../paint_activity.dart';
+import '../plus_text.dart' show tr;
 import '../profile/profile.dart';
 import '../screens/home_screen.dart' show unitsOf;
 import '../screens/log_workout.dart' show bumpInsights;
@@ -52,6 +53,7 @@ import 'picker.dart';
 // poster.dart imports this file back for [ActivityResult]; that is the seam,
 // not a layering mistake.
 import 'poster.dart' show PosterStatRow, posterStatIcon, splitStatUnit;
+import 'run_insights.dart' show recoveryHours;
 import 'share.dart';
 
 /// The defining visual object of an activity. Everything else supports it.
@@ -1123,6 +1125,17 @@ class SessionStats extends StatelessWidget {
           accent: accent,
         ),
       );
+    }
+    // Edge+: recovery time after this session, from its strain.
+    if (r.strain case final strain? when strain > 0) {
+      if (rows.isNotEmpty) rows.add(Divider(color: p.line, height: S.x5));
+      rows.add(PosterStatRow(
+        icon: LucideIcons.batteryCharging,
+        label: tr(c, 'Erholungszeit', 'Recovery time'),
+        value: '${recoveryHours(strain)}',
+        unit: 'h',
+        accent: accent,
+      ));
     }
     return Surface(child: Column(children: rows));
   }

@@ -25,6 +25,7 @@ import '../data/day_label.dart';
 // isolate safety. One grammar for "a required input was missing" across both
 // pipelines rather than a second one here.
 import 'onehz_pipeline.dart' show kSleepClockAnchorSec, needInputNote;
+import 'sleep_score.dart';
 
 /// Build the cross-day analytics bundle from a time-ordered (OLDEST FIRST) list
 /// of per-day records and the user profile.
@@ -492,6 +493,9 @@ Map<String, dynamic> buildCrossDayBundle(
           // the failure this whole convention exists to stop.
           note: need.present ? needInputNote('tst_min') : need.note,
         );
+  // Edge+: the four-part sleep score (lib/compute/sleep_score.dart). Additive:
+  // `perf` above stays exactly what the original computes.
+  final sleepScore = _edgeSleepScore(days, lastTstMin, need);
   // typical wake clock-minute + efficiency from recent days (medians).
   //
   // The wake is read on the clock of the zone each night was LIVED in, not the
@@ -687,6 +691,7 @@ Map<String, dynamic> buildCrossDayBundle(
       // worth up to 45 min of need.
       'strain_bonus_min': appliedStrainBonusMin,
       'performance': perf.toJson((v) => v.toJson()),
+      'sleep_score': sleepScore,
       'bedtime': bedtime.toJson((v) => v.toJson()),
       'wake': wakeRec.toJson((v) => v.toJson()),
     },
@@ -885,6 +890,39 @@ double? _todayNum(List<Map<String, dynamic>> days, String key) {
   final last = days.last;
   if (last['is_today'] != true) return null;
   return _numOrNull(last[key]);
+}
+
+/// Edge+: tonight's [computeSleepScore] from today's row and the rows before
+/// it — the four prior nights' clocks, up to 30 prior nights' stress.
+Map<String, dynamic> _edgeSleepScore(
+  List<Map<String, dynamic>> days,
+  double? tstMin,
+  ana.Metric<ana.SleepNeed> need,
+) {
+  final today = days.isNotEmpty && days.last['is_today'] == true
+      ? days.last
+      : null;
+  final prior = today == null ? days : days.sublist(0, days.length - 1);
+  double? clock(Map<String, dynamic>? d, String k) => d?[k] is num
+      ? _nightClockMin((d![k] as num).toInt(), d)
+      : null;
+  final nights = <NightClock>[
+    for (final d in prior.reversed.take(4))
+      if (clock(d, 'onset_sec') != null && clock(d, 'wake_sec') != null)
+        (onsetMin: clock(d, 'onset_sec')!, wakeMin: clock(d, 'wake_sec')!),
+  ];
+  return computeSleepScore(
+    tstMin: tstMin,
+    needMin: need.present ? need.value!.needSec / 60 : null,
+    onsetMin: clock(today, 'onset_sec'),
+    wakeMin: clock(today, 'wake_sec'),
+    priorNights: nights,
+    efficiencyPct: _numOrNull(today?['efficiency']),
+    stress: _numOrNull(today?['stress']),
+    priorStress: [
+      for (final d in prior.reversed.take(30)) ?_numOrNull(d['stress']),
+    ],
+  );
 }
 
 /// Sat/Sun => free day. We lack a real work/free calendar; the weekday split is

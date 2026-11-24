@@ -2177,7 +2177,7 @@ Widget detailLinkRow(BuildContext c, IconData icon, String title, String sub,
   final p = P.of(c);
   return Pressable(
     onTap: onTap,
-    semanticLabel: '$title: $sub',
+    semanticLabel: sub.isEmpty ? title : '$title: $sub',
     child: Container(
       padding: const EdgeInsets.all(S.x4),
       decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
@@ -2188,7 +2188,7 @@ Widget detailLinkRow(BuildContext c, IconData icon, String title, String sub,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title,
                 style: F.body.copyWith(color: p.ink, fontWeight: FontWeight.w600)),
-            Text(sub, style: F.over.copyWith(color: p.ink3)),
+            if (sub.isNotEmpty) Text(sub, style: F.over.copyWith(color: p.ink3)),
           ]),
         ),
         Icon(LucideIcons.chevronRight, size: 18, color: p.ink3),

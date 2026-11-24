@@ -64,6 +64,8 @@ Future<void> maybeShowCheckIn(BuildContext c) async {
           builder: (_) => JournalCompose(evening: true, askSleep: !sleepAsked)));
     } else {
       Prefs.setString(_kMorningKey, today);
+      await warmTodayWeather();
+      if (!c.mounted) return;
       final r = await showModalBottomSheet<(int?, int?)>(
         context: c,
         isScrollControlled: true,
