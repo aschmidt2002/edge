@@ -68,6 +68,8 @@ const Map<String, String> kSecretsNotBackedUp = {
       'pair the band again on this phone',
   'lib/ble/oura_link.dart': 'Oura pairing key is a credential; '
       'pair the ring again on this phone',
+  'lib/ai/food_photo.dart': 'Edge+ Claude API key for meal photos is a '
+      'credential; enter it again on the new phone',
 };
 
 /// The app root reloads presentation controllers after AppState adopts prefs.
