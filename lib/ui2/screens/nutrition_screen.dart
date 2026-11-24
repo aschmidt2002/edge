@@ -30,7 +30,8 @@ import '../onboarding/profile_setup.dart' show formatDay;
 import 'journal_compose.dart' show OsTextField;
 import 'log_food.dart';
 import 'nutrition_plus.dart';
-import '../profile/profile.dart' show ProfileAvatar;
+import '../profile/profile.dart' show ProfileAvatar, SetRow;
+import 'claude_key_sheet.dart';
 
 class NutritionScreen extends StatefulWidget {
   /// Pushed from the Activity tab rather than shown as a tab: a page with a
@@ -679,6 +680,18 @@ class _NutritionScreenState extends State<NutritionScreen> with RevisionReload {
           ),
           action: l?.nutritionEditAction ?? 'Edit',
           onAction: _editWeightGoal,
+        ),
+        const SizedBox(height: S.x4),
+        // Edge+: the API key for the meal photo estimate.
+        Surface(
+          pad: const EdgeInsets.symmetric(horizontal: S.x4),
+          child: SetRow(
+            LucideIcons.camera,
+            C.domFood,
+            trDe(c, 'Claude für Essensfotos', 'Claude for meal photos'),
+            sub: trDe(c, 'Eigener API-Key', 'Your own API key'),
+            onTap: () => editClaudeKey(c),
+          ),
         ),
         const SizedBox(height: S.x4),
         Surface(

@@ -31,7 +31,11 @@ import androidx.core.content.ContextCompat
  */
 class EdgeTrackingService : Service() {
     companion object {
-        private const val CHANNEL_ID = "edge_tracking"
+        // Edge+: a NEW id, because a channel's importance can't be lowered
+        // after it exists. The old "edge_tracking" (IMPORTANCE_LOW) channel is
+        // deleted in createChannel().
+        private const val CHANNEL_ID = "edge_tracking_min"
+        private const val OLD_CHANNEL_ID = "edge_tracking"
         private const val NOTIF_ID = 4201
         private const val TAG = "EdgeTrackingService"
 
@@ -249,26 +253,34 @@ class EdgeTrackingService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Edge+: Android requires a notification for a foreground service,
+            // so it can't be removed. IMPORTANCE_MIN is the quietest it gets:
+            // no status-bar icon, no sound, collapsed at the bottom of the
+            // shade. The user can also switch this channel off in the system
+            // settings; the service keeps running either way.
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.deleteNotificationChannel(OLD_CHANNEL_ID)
             val ch = NotificationChannel(
                 CHANNEL_ID,
-                "Edge Tracking",
-                NotificationManager.IMPORTANCE_LOW,
+                "Background sync",
+                NotificationManager.IMPORTANCE_MIN,
             )
-            ch.description = "Keeps your strap syncing in the background"
             ch.setShowBadge(false)
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .createNotificationChannel(ch)
+            ch.setSound(null, null)
+            ch.enableVibration(false)
+            nm.createNotificationChannel(ch)
         }
     }
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Edge Tracking")
-            .setContentText("Keeping your strap in sync")
+            .setContentTitle("Edge+")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setOngoing(true)
             .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 }
