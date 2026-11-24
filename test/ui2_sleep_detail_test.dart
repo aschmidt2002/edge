@@ -76,7 +76,7 @@ void main() {
         effHistory: _flat(20, 91),
       ),
     );
-    expect(find.text('Did you sleep enough?'), findsOneWidget);
+    expect(find.text('Duration'), findsOneWidget);
     expect(find.textContaining('Typical for you'), findsWidgets);
   });
 
@@ -106,7 +106,8 @@ void main() {
         effHistory: _flat(20, 91),
       ),
     );
-    expect(find.text('Unusual on Wednesday, 20 May'), findsOneWidget);
+    // Edge+: extremes sit under the comparison's own heading.
+    expect(find.text('Against your usual'), findsOneWidget);
     // SLP-13a — the Light/Deep split is unvalidated and flagged
     // `deep_low_confidence` all the way up, so ranking last night's deep
     // minutes against 20 other nights of the same split is not a claim we own.
@@ -134,7 +135,8 @@ void main() {
       ),
     );
     expect(find.text('Least deep sleep lately'), findsNothing);
-    expect(find.textContaining('Nothing stood out'), findsOneWidget);
+    // Edge+: no all-clear card; the verdicts above already say "typical".
+    expect(find.textContaining('Nothing stood out'), findsNothing);
   });
 
   // ── SLP-13: stage minutes are intervals, and the width is this night's ──
@@ -179,11 +181,11 @@ void main() {
       };
       await _pump(t,
           SleepData(day: '2026-05-20', night: n, tstHistory: _flat(20, 420)));
-      // Three times: the Deep lane, the Stages row and the Deep comparison,
-      // all the count.
-      expect(find.text('1h 20m'), findsNWidgets(3));
-      // Beside the Light lane and in the Stages row.
-      expect(find.text('4h 10m'), findsNWidgets(2));
+      // Twice: the Deep lane and the Deep comparison, both the count. Exact
+      // minutes fit beside the lanes, so no stage list repeats them (Edge+).
+      expect(find.text('1h 20m'), findsNWidgets(2));
+      // Beside the Light lane.
+      expect(find.text('4h 10m'), findsOneWidget);
       expect(find.textContaining('Each stage is a range'), findsNothing);
     });
 
@@ -231,7 +233,10 @@ void main() {
         effHistory: _flat(20, 91),
       ),
     );
-    expect(find.textContaining('Nothing stood out'), findsOneWidget);
+    // Edge+: the verdicts say it; no separate all-clear card repeats them.
+    expect(find.textContaining('Typical for you'), findsWidgets);
+    expect(find.textContaining('Nothing stood out'), findsNothing);
+    expect(find.byType(InsightCard), findsNothing);
   });
 
   testWidgets('with no history the screen compares nothing and claims nothing',
@@ -281,7 +286,8 @@ void main() {
         ),
         scale: scale,
       );
-      expect(find.text('Unusual on Wednesday, 20 May'), findsOneWidget);
+      expect(find.text('Against your usual'), findsOneWidget);
+      expect(find.text('Sleeping heart rate ran high'), findsOneWidget);
     });
   }
 
@@ -352,7 +358,8 @@ void main() {
     );
     expect(find.text('WATCHED'), findsOneWidget);
     expect(find.text('6h 20m'), findsOneWidget);
-    expect(find.textContaining('is not a measurement'), findsOneWidget);
+    // Edge+: the label pair carries it, no paragraph.
+    expect(find.text('ASLEEP'), findsOneWidget);
   });
 
   testWidgets('a fully observed night says nothing about watching', (t) async {
@@ -398,11 +405,55 @@ void main() {
         longestSleepMin: 162,
       ),
     );
-    expect(find.textContaining('At least 3 wake-ups of 5 minutes or more'),
-        findsOneWidget);
-    expect(find.textContaining('invisible to a wrist'), findsOneWidget);
-    expect(
-        find.textContaining('Longest unbroken stretch 2h 42m'), findsOneWidget);
+    // Edge+: a number row, the floor kept as "≥".
+    expect(find.text('WAKE-UPS'), findsOneWidget);
+    expect(find.text('≥ 3'), findsOneWidget);
+    expect(find.text('LONGEST'), findsOneWidget);
+    expect(find.text('2h 42m'), findsOneWidget);
+  });
+
+  // ── Edge+: the sleep score and its four parts ────────────────────────────
+
+  testWidgets('the sleep score shows its parts and skips the missing one',
+      (t) async {
+    await _pump(
+      t,
+      SleepData(
+        day: todayLabel(),
+        night: _night(),
+        score: const {
+          'score': 82,
+          'sufficiency_pct': 91,
+          'consistency_pct': null,
+          'efficiency_pct': 88.4,
+          'stress_pct': 70,
+          'stress_level': 'moderate',
+        },
+      ),
+    );
+    expect(find.text('Sleep score'), findsOneWidget);
+    expect(find.text('82'), findsOneWidget);
+    expect(find.text('Sufficiency'), findsOneWidget);
+    expect(find.text('91 %'), findsOneWidget);
+    expect(find.text('88 %'), findsOneWidget);
+    // Absent, so no row rather than a zero.
+    expect(find.text('Consistency'), findsNothing);
+    expect(find.text('moderate'), findsOneWidget);
+  });
+
+  testWidgets('no score, or a past night, draws no score at all', (t) async {
+    await _pump(t, SleepData(day: todayLabel(), night: _night()));
+    expect(find.text('Sleep score'), findsNothing);
+    await _pump(
+      t,
+      SleepData(
+        day: '2026-05-20',
+        latestDay: '2026-05-21',
+        night: _night(),
+        score: const {'score': 82},
+      ),
+    );
+    expect(find.text('Sleep score'), findsNothing);
   });
 
   SleepData planned(String day, {String? latest}) => SleepData(
