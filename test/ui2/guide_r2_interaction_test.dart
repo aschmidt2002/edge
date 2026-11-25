@@ -5,7 +5,7 @@ import 'package:openstrap_edge/ui2/guides/guide_run.dart'; import 'package:opens
 import 'package:openstrap_edge/ui2/guides/guide_target.dart'; import '../support/guide_text.dart';
 import '../support/live_guide_stage.dart'; import '../support/guide_r2_scroll_fixture.dart';
 import 'package:openstrap_edge/ui2/guides/guide_step_card.dart'; import 'package:openstrap_edge/ui2/guides/live_guide_overlay.dart';
-import 'package:openstrap_edge/ui2/screens/training_plans_screen.dart' show TrainingPlansScreen;
+import 'package:openstrap_edge/ui2/experimental/xp_features.dart' show XpScreen;
 import '../support/guide_r2_fixture.dart'; import '../support/guide_r2_scenes.dart'; import '../support/live_guide_harness.dart';
 // Edge+: the start card prints the label in sentence case ("Start a session").
 Finder _startText() => find.byWidgetPredicate((w) => w is Text &&
@@ -19,10 +19,10 @@ void main() { setUpAll(() => r2OpenDb('guide_r2_interaction.db')); tearDownAll(L
       final m = await pumpR2Scene(t, r2Scenes.firstWhere((s) => s.guide == id && s.step == 'open-history')); try {
         await settleLiveGuide(t, frames: 18);
         // Edge+: the recovery card sits above the week, so Training is scrolled to first.
-        await t.ensureVisible(find.text('Training plans')); await t.pump(); await t.tap(find.text('Training plans'), warnIfMissed: false);
-        await settleLiveGuide(t, frames: 16); expect(find.byType(TrainingPlansScreen), findsNothing); expect(m.run.currentStep?.id, 'open-history'); m.removeOverlay(); await t.pump();
-        await t.ensureVisible(find.text('Training plans')); await t.pump(); await t.tap(find.text('Training plans')); await settleLiveGuide(t, frames: 16);
-        expect(find.byType(TrainingPlansScreen), findsOneWidget, reason: 'the original control works after the guide ends'); } finally { await disposeR2(t, m); } }); }
+        await t.ensureVisible(find.text('Weekly plan')); await t.pump(); await t.tap(find.text('Weekly plan'), warnIfMissed: false);
+        await settleLiveGuide(t, frames: 16); expect(find.byType(XpScreen), findsNothing); expect(m.run.currentStep?.id, 'open-history'); m.removeOverlay(); await t.pump();
+        await t.ensureVisible(find.text('Weekly plan')); await t.pump(); await t.tap(find.text('Weekly plan')); await settleLiveGuide(t, frames: 16);
+        expect(find.byType(XpScreen), findsOneWidget, reason: 'the original control works after the guide ends'); } finally { await disposeR2(t, m); } }); }
   // WHY: passing input through must preserve the exact real callback count.
   // # catches: W2 redirected advance, forwarding a synthetic tap in addition to the original pointer,
   // or absorbing the dimmed control's original tap.

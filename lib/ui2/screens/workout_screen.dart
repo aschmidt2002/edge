@@ -72,6 +72,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
   // clock icon on the start card.
   int tab = 0;
 
+  /// Edge+: which of the three sport tiles is open, if any.
+  int? _sport;
+
   Future<_WorkoutData>? _load;
 
   @override
@@ -260,9 +263,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
     final p = P.of(c);
     final loc = AppLocalizations.of(c);
     return [
-      // Edge+: recovery first, as one ring with its four inputs around it.
-      const RecoveryCard(),
-      const SizedBox(height: S.x3),
       // Edge+: the week first, History beside it, Start below.
       IntrinsicHeight(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -274,23 +274,30 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
       const SizedBox(height: S.x3),
       _startCard(c, d),
       const SizedBox(height: S.x3),
+      // Edge+: the three sports open their own content below the row; a
+      // second tap closes it again. Starting moved into that content.
       Row(
         children: [
           for (var i = 0; i < 3; i++) ...[
             if (i > 0) const SizedBox(width: S.x3),
             Expanded(
               child: WorkoutQuickTile(
-              quickStart[i],
-              () => Navigator.of(c).push(MaterialPageRoute(
-                  builder: (_) => ActivitySetup(quickStart[i],
-                      weightKg: d.weightKg, host: _host(d)))),
-            ),
+                quickStart[i],
+                () => setState(() => _sport = _sport == i ? null : i),
+                selected: _sport == i,
+              ),
             ),
           ],
         ],
       ),
+      if (_sport != null) ...[
+        const SizedBox(height: S.x3),
+        ..._sportPanel(c, d, _sport!),
+      ],
       const SizedBox(height: S.x3),
-      const RunInsightsCard(),
+      // Edge+: recovery as one ring with its four inputs around it, under the
+      // sports.
+      const RecoveryCard(),
       // Edge+: one heading for the doors. Steps draw their week; the numbers
       // live one tap down.
       Section(
@@ -299,10 +306,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x1),
           child: Column(children: [
             _stepsRow(c, d),
-            _doorRow(c, LucideIcons.dumbbell,
-                tr(c, 'Trainingspläne', 'Training plans'),
-                () => Navigator.of(c).push(MaterialPageRoute<void>(
-                    builder: (_) => TrainingPlansScreen(weightKg: d.weightKg)))),
             _doorRow(c, LucideIcons.sparkles,
                 tr(c, 'Trainingsempfehlung', 'Training advice'),
                 () => Navigator.of(c).push(MaterialPageRoute<void>(
@@ -317,7 +320,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
           ]),
         ),
       ),
-      ProgressSection(ctl: d.load?.ctl, cardioMinWeek: d.cardioMinWeek),
       Section(
         loc?.workoutTrainingLoad ?? 'Training load',
         Column(children: [
@@ -349,6 +351,39 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
             .push(MaterialPageRoute(builder: (_) => const DayStrainDetail())),
       ),
     ];
+  }
+
+  /// Edge+: what one of the three sports shows when its tile is tapped.
+  /// Running: recovery time and race predictions. Weight training: the plans
+  /// and progress by muscle group. Every sport keeps its start door.
+  List<Widget> _sportPanel(BuildContext c, _WorkoutData d, int i) {
+    final a = quickStart[i];
+    final start = _doorRow(c, LucideIcons.play,
+        tr(c, 'Session starten', 'Start session'),
+        () => Navigator.of(c).push(MaterialPageRoute(
+            builder: (_) =>
+                ActivitySetup(a, weightKg: d.weightKg, host: _host(d)))));
+    Widget doors(List<Widget> rows) => Surface(
+        pad: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x1),
+        child: Column(children: rows));
+    return switch (a.track) {
+      Track.sets => [
+          doors([
+            start,
+            _doorRow(c, LucideIcons.dumbbell,
+                tr(c, 'Trainingspläne', 'Training plans'),
+                () => Navigator.of(c).push(MaterialPageRoute<void>(
+                    builder: (_) => TrainingPlansScreen(weightKg: d.weightKg)))),
+          ]),
+          ProgressSection(ctl: d.load?.ctl, cardioMinWeek: d.cardioMinWeek),
+        ],
+      _ when a.gait => [
+          const RunInsightsCard(),
+          const SizedBox(height: S.x3),
+          doors([start]),
+        ],
+      _ => [doors([start])],
+    };
   }
 
   Widget _weekStrip(BuildContext c, _WorkoutData d) {
@@ -1178,7 +1213,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
 class WorkoutQuickTile extends StatelessWidget {
   final Activity a;
   final VoidCallback onTap;
-  const WorkoutQuickTile(this.a, this.onTap, {super.key});
+
+  /// Edge+: drawn in its sport's wash while its content is open below.
+  final bool selected;
+  const WorkoutQuickTile(this.a, this.onTap, {super.key, this.selected = false});
 
   @override
   Widget build(BuildContext c) {
@@ -1186,6 +1224,7 @@ class WorkoutQuickTile extends StatelessWidget {
     return Surface(
       pad: const EdgeInsets.symmetric(vertical: S.x4, horizontal: S.x2),
       onTap: onTap,
+      color: selected ? Color.alphaBlend(p.wash(a.color), p.card) : null,
       semanticLabel: a.displayName(c),
       child: Column(
         children: [
