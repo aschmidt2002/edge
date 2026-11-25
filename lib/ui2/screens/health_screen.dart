@@ -990,11 +990,12 @@ class _HealthScreenState extends State<HealthScreen> with RevisionReload {
             LucideIcons.wind,
             l?.wellnessTabMind ?? 'Mind',
             // Cycle is a tab there only while cycle tracking is on.
+            // Edge+: breathing moved to Sleep → Einschlafen.
             _cycleTrackingOn(c)
-                ? (l?.healthWellbeingAllSubCycle ??
-                    'Breathing, mood, the journal, habits, medication and cycle')
-                : (l?.healthWellbeingAllSub ??
-                    'Breathing, mood, the journal, habits and medication'),
+                ? tr(c, 'Stimmung, Tagebuch, Gewohnheiten, Medikamente und Zyklus',
+                    'Mood, the journal, habits, medication and cycle')
+                : tr(c, 'Stimmung, Tagebuch, Gewohnheiten und Medikamente',
+                    'Mood, the journal, habits and medication'),
             () => go(c, const WellnessScreen(initialTab: 0))),
       ),
 

@@ -19,6 +19,8 @@ const _mustTravel = {
   'edgeplus.oralb.sessions.v1', // Edge+
   'edgeplus.screentime.on', 'edgeplus.screentime.days.v1', // Edge+
   'edgeplus.screentime.labels.v1', // Edge+
+  'edge_plus_winddown_log', 'edge_plus_sleep_audio_shows', // Edge+
+  'edge_plus_sleep_audio_positions', // Edge+
   'activity.goals', 'plus.fast_start', 'plus.fast_goal_h', // Edge+
   'plus.weather_lat', 'plus.weather_lon', 'plus.weather_place', // Edge+
   'theme_choice', 'locale_override', 'units_system', 'clock_format',

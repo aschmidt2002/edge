@@ -4,6 +4,7 @@ import '../data/db.dart';
 import '../data/local_repository.dart';
 import '../live/breathing_live_activity.dart';
 import '../stress/breath_phases.dart';
+import '../stress/winddown_log.dart';
 import '../widget/widget_service.dart';
 
 /// Owns guided breathing sessions and their quiet windows.
@@ -81,6 +82,10 @@ class BreathingController {
   /// True while a quiet window is capturing outside the paced block.
   bool breathingWindowOpen = false;
 
+  /// Edge+: the last session's before/after, or null until one has both
+  /// windows measured. Cleared when a new window opens.
+  WinddownEntry? lastComparison;
+
   /// The frames of the PRE window, taken at the moment pacing began.
   List<String>? _preWindowFrames;
 
@@ -98,6 +103,7 @@ class BreathingController {
       return;
     }
     breathingWindowOpen = true;
+    lastComparison = null;
     _preWindowFrames = null;
     _windowRowStartedAt = null;
     _breathingFrames.clear();
@@ -123,8 +129,27 @@ class BreathingController {
     _nudgeLive(); // the window's HR ownership ends here
     _notify();
     if (row == null || pre == null) return;
-    final before = await _windowRmssd(pre);
-    final after = await _windowRmssd(post);
+    final b = await _windowCheck(pre);
+    final a = await _windowCheck(post);
+    double? num_(Map<String, dynamic>? m, String k) =>
+        (m?[k] as num?)?.toDouble();
+    final before = num_(b, 'rmssd');
+    final after = num_(a, 'rmssd');
+    // Edge+: the whole before/after, shown on the result and kept per exercise.
+    final entry = WinddownEntry(
+      at: DateTime.fromMillisecondsSinceEpoch(row),
+      key: breathingPattern.key,
+      label: breathingPattern.label,
+      preHr: num_(b, 'mean_hr') ?? num_(b, 'nn_hr'),
+      postHr: num_(a, 'mean_hr') ?? num_(a, 'nn_hr'),
+      preRmssd: before,
+      postRmssd: after,
+      preResp: num_(b, 'resp'),
+      postResp: num_(a, 'resp'),
+    );
+    lastComparison = entry.hasAny ? entry : null;
+    _notify();
+    await WinddownLog.add(entry);
     // Nothing readable either side is not a measurement — leave both columns
     // NULL rather than writing a row the paired test would then have to drop.
     if (before == null && after == null) return;
@@ -139,12 +164,12 @@ class BreathingController {
     }
   }
 
-  Future<double?> _windowRmssd(List<String> frames) async {
+  Future<Map<String, dynamic>?> _windowCheck(List<String> frames) async {
     final r = _repo();
     if (r == null || frames.isEmpty) return null;
     try {
       final res = await r.spotCheck(frames);
-      return res['ok'] == true ? (res['rmssd'] as num?)?.toDouble() : null;
+      return res['ok'] == true ? res : null;
     } catch (_) {
       return null;
     }
@@ -166,6 +191,7 @@ class BreathingController {
     breathingActive = true;
     breathingResult = null;
     breathingError = null;
+    if (!breathingWindowOpen) lastComparison = null;
     if (breathingWindowOpen) {
       _preWindowFrames = List<String>.from(_breathingFrames);
     }

@@ -2,6 +2,7 @@ package wtf.openstrap.openstrap_edge
 
 import android.app.Application
 import android.content.Context
+import com.ryanheise.audioservice.AudioServicePlugin
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -65,6 +66,10 @@ class EdgeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Edge+: audio_service (sleep sounds) looks its engine up by id. Point it at
+        // ours BEFORE any engine exists, so the media session talks to the same
+        // Dart isolate instead of starting a second engine without our channels.
+        AudioServicePlugin.setFlutterEngineId(ENGINE_ID)
         // Periodic watchdog: restart the tracking foreground service if the OS
         // killed it while a band is paired (START_STICKY backup). Idempotent (KEEP
         // policy). Paired-gated: unconditional scheduling gave even a never-paired
