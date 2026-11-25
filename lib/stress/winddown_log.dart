@@ -124,7 +124,7 @@ List<WinddownRank> rankWinddown(List<WinddownEntry> entries) {
 }
 
 class WinddownLog {
-  static const prefsKey = 'edge_plus_winddown_log';
+  static const logKey = 'edge_plus_winddown_log';
   static const _cap = 120;
 
   /// Bumped on every write so open screens re-read.
@@ -133,7 +133,7 @@ class WinddownLog {
   /// Oldest first.
   static Future<List<WinddownEntry>> load() async {
     try {
-      final raw = (await SharedPreferences.getInstance()).getString(prefsKey);
+      final raw = (await SharedPreferences.getInstance()).getString(logKey);
       if (raw == null) return const [];
       final list = jsonDecode(raw);
       if (list is! List) return const [];
@@ -149,7 +149,7 @@ class WinddownLog {
       final all = [...await load(), e];
       final kept = all.length > _cap ? all.sublist(all.length - _cap) : all;
       await (await SharedPreferences.getInstance()).setString(
-        prefsKey,
+        logKey,
         jsonEncode([for (final x in kept) x.toJson()]),
       );
       changed.value++;

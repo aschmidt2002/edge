@@ -115,6 +115,9 @@ const Map<String, String> kPrefTypes = {
   'edgeplus.screentime.on': 'bool', // Edge+: screen time connected
   'edgeplus.screentime.days.v1': 'string', // Edge+: screen time per day
   'edgeplus.screentime.labels.v1': 'string', // Edge+: app names
+  'edge_plus_winddown_log': 'string', // Edge+: breathing before/after
+  'edge_plus_sleep_audio_shows': 'string', // Edge+: saved podcasts
+  'edge_plus_sleep_audio_positions': 'string', // Edge+: where episodes stopped
   'activity.goals': 'string', // Edge+: activity progress goals
   'plus.fast_start': 'int', // Edge+: fasting timer start
   'plus.fast_goal_h': 'int', // Edge+: fasting goal in hours
