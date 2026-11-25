@@ -83,7 +83,12 @@ class _Doors extends StatelessWidget {
         Pressable(
           onTap: d.$3,
           semanticLabel: d.$2,
+          // Pressable centres its child at the child's own size, which undid
+          // the stretch below: the one-line "Wecker" tile came out smaller
+          // than Body clock beside it. Fill the cell in the three-across row.
           child: Container(
+            width: row ? null : double.infinity,
+            height: row ? null : double.infinity,
             padding: const EdgeInsets.symmetric(
                 horizontal: S.x3, vertical: S.x4),
             decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
