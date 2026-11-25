@@ -4,6 +4,8 @@
 // twice a day, the streak and the pressure ring. Everything here is read from
 // sessions this app heard (lib/oralb/oralb.dart); nothing is estimated.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -86,6 +88,8 @@ class DentalScreen extends StatelessWidget {
               Text(tr(c, '7 Tage', '7 days'), style: F.cap.copyWith(color: p.ink3)),
             ]),
           ),
+          if (zoneTrend(sessions, now ?? DateTime.now()) case final z?)
+            Section(tr(c, 'Bereiche · 30 Tage', 'Areas · 30 days'), _JawCard(z)),
           Section(
             tr(c, 'Verlauf', 'History'),
             Surface(
@@ -238,6 +242,150 @@ class _LiveCard extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Upper and lower jaw, each tooth coloured by how long the timer ran in its
+/// zone on average against an even share of two minutes.
+///
+/// Zone order is the dental quadrant order (FDI): 1 upper right, 2 upper
+/// left, 3 lower left, 4 lower right; six zones split each jaw into right,
+/// front and left. Drawn as you see a face, so the user's right is on the left.
+/// ponytail: the order is the convention, not read from the brush. If a
+/// real iO shows another order, change [jawZone] only.
+class _JawCard extends StatelessWidget {
+  const _JawCard(this.z);
+  final ({int sessions, int zones, Map<int, double> avg}) z;
+
+  @override
+  Widget build(BuildContext c) {
+    final p = P.of(c);
+    final goal = kBrushGoalSeconds / z.zones;
+    Color colour(int zone) {
+      final r = (z.avg[zone] ?? 0) / goal;
+      return p.fill(r >= 0.85 ? C.green : r >= 0.6 ? C.orange : C.red);
+    }
+
+    final weakest = z.avg.entries.reduce((a, b) => a.value <= b.value ? a : b);
+    return Surface(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Semantics(
+          label: [
+            for (var i = 1; i <= z.zones; i++)
+              '${zoneName(c, i, z.zones)} ${z.avg[i]!.round()} s',
+          ].join(', '),
+          child: AspectRatio(
+            aspectRatio: 1.15,
+            child: Stack(children: [
+              Positioned.fill(
+                  child: CustomPaint(painter: _JawPainter(z.zones, colour))),
+              // As you see a face: the user's right is on the left.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(tr(c, 'R', 'R'), style: F.cap.copyWith(color: p.ink3)),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(tr(c, 'L', 'L'), style: F.cap.copyWith(color: p.ink3)),
+              ),
+              Align(
+                child: Text(tr(c, 'oben\n\nunten', 'upper\n\nlower'),
+                    textAlign: TextAlign.center,
+                    style: F.cap.copyWith(color: p.ink3)),
+              ),
+            ]),
+          ),
+        ),
+        const SizedBox(height: S.x2),
+        Row(children: [
+          Expanded(
+            child: Text(
+              weakest.value / goal >= 0.85
+                  ? tr(c, 'Alle Bereiche gleichmäßig', 'All areas even')
+                  : tr(c, 'Am kürzesten: ${zoneName(c, weakest.key, z.zones)}',
+                      'Shortest: ${zoneName(c, weakest.key, z.zones)}'),
+              style: F.body.copyWith(color: p.ink),
+            ),
+          ),
+          Text('Ø ${weakest.value.round()} / ${goal.round()} s',
+              style: F.cap.copyWith(color: p.ink3)),
+        ]),
+        const SizedBox(height: S.x1),
+        Text(
+          tr(c, 'Nach dem Bereichs-Timer der Bürste, nicht nach erkannter Position · ${z.sessions}× geputzt',
+              'From the brush’s area timer, not a detected position · ${z.sessions} sessions'),
+          style: F.cap.copyWith(color: p.ink3),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Which zone a tooth belongs to: [upper] jaw, [i] 0..15 left to right on
+/// screen (the user's right first).
+int jawZone(bool upper, int i, int zones) {
+  final right = i < 8;
+  if (zones == 4) return upper ? (right ? 1 : 2) : (right ? 4 : 3);
+  final part = i < 5 ? 0 : i < 11 ? 1 : 2; // right, front, left
+  return upper ? 1 + part : 6 - part;
+}
+
+String zoneName(BuildContext c, int zone, int zones) {
+  if (zones == 4) {
+    return switch (zone) {
+      1 => tr(c, 'oben rechts', 'upper right'),
+      2 => tr(c, 'oben links', 'upper left'),
+      3 => tr(c, 'unten links', 'lower left'),
+      _ => tr(c, 'unten rechts', 'lower right'),
+    };
+  }
+  return switch (zone) {
+    1 => tr(c, 'oben rechts', 'upper right'),
+    2 => tr(c, 'oben vorne', 'upper front'),
+    3 => tr(c, 'oben links', 'upper left'),
+    4 => tr(c, 'unten links', 'lower left'),
+    5 => tr(c, 'unten vorne', 'lower front'),
+    _ => tr(c, 'unten rechts', 'lower right'),
+  };
+}
+
+class _JawPainter extends CustomPainter {
+  _JawPainter(this.zones, this.colour);
+  final int zones;
+  final Color Function(int zone) colour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final rx = w * 0.40, ry = h * 0.30;
+    for (final upper in [true, false]) {
+      // Each jaw is a U: the upper one opens downward from the top half, the
+      // lower one upward from the bottom half, with a gap between them.
+      final centre = Offset(w / 2, upper ? h * 0.44 : h * 0.56);
+      for (var i = 0; i < 16; i++) {
+        // Angles across the U, molars at the ends.
+        final t = (i + 0.5) / 16;
+        final a = math.pi * (1 + t); // 180°..360°: the top arc
+        final dir = upper ? 1.0 : -1.0;
+        final pos = Offset(centre.dx + rx * math.cos(a), centre.dy + dir * ry * math.sin(a));
+        // Back teeth are wider than the front ones.
+        final back = (t - 0.5).abs() * 2; // 0 front, 1 back
+        final tw = w * (0.050 + 0.030 * back), th = w * (0.060 + 0.012 * back);
+        canvas.save();
+        canvas.translate(pos.dx, pos.dy);
+        canvas.rotate(math.atan2(dir * ry * math.cos(a), -rx * math.sin(a)));
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(center: Offset.zero, width: tw, height: th),
+              Radius.circular(tw * 0.35)),
+          Paint()..color = colour(jawZone(upper, i, zones)),
+        );
+        canvas.restore();
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_JawPainter old) => true;
 }
 
 /// "Heute 07:41", "Gestern 22:10", "Mo 21.11. 07:30".

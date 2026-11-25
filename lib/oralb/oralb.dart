@@ -104,6 +104,7 @@ class BrushSession {
     required this.seconds,
     this.pressureWarnings = 0,
     this.mode,
+    this.zones = const {},
   });
 
   /// Epoch seconds the session started (arrival time minus its timer).
@@ -116,10 +117,17 @@ class BrushSession {
   final int pressureWarnings;
   final int? mode;
 
+  /// Seconds the brush's timer spent in each zone it reported (byte 8),
+  /// zone number to seconds. Empty for sessions heard before this existed.
+  /// What the zone number MEANS on an iO is not settled: oralb-ble reads it
+  /// as the 30-second pacer, not a detected position.
+  final Map<int, int> zones;
+
   DateTime get start => DateTime.fromMillisecondsSinceEpoch(startSec * 1000);
 
   Map<String, Object?> toJson() =>
-      {'s': startSec, 'd': seconds, 'p': pressureWarnings, 'm': mode};
+      {'s': startSec, 'd': seconds, 'p': pressureWarnings, 'm': mode,
+        if (zones.isNotEmpty) 'z': {for (final e in zones.entries) '${e.key}': e.value}};
 
   static BrushSession? fromJson(Object? m) {
     if (m is! Map || m['s'] is! int || m['d'] is! int) return null;
@@ -128,6 +136,11 @@ class BrushSession {
       seconds: m['d'] as int,
       pressureWarnings: m['p'] is int ? m['p'] as int : 0,
       mode: m['m'] is int ? m['m'] as int : null,
+      zones: {
+        if (m['z'] case final Map z)
+          for (final e in z.entries)
+            if (e.value is int) ?int.tryParse('${e.key}'): e.value as int,
+      },
     );
   }
 }
@@ -147,6 +160,8 @@ class BrushTracker {
   int _seconds = 0, _warnings = 0, _lastBrushMs = 0;
   int? _mode;
   bool _red = false;
+  int _lastTimer = 0;
+  Map<int, int> _zones = {};
 
   bool get open => _startSec != null;
 
@@ -161,7 +176,17 @@ class BrushTracker {
         _startSec = atMs ~/ 1000 - a.seconds;
         _seconds = _warnings = 0;
         _red = false;
+        _zones = {};
+        _lastTimer = a.seconds;
       }
+      // The timer's advance since the last advert goes to the zone this
+      // advert reports. A gap longer than a few seconds (a missed stretch) is
+      // dropped rather than guessed onto one zone.
+      final step = a.seconds - _lastTimer;
+      if (a.sector > 0 && step > 0 && step <= 5) {
+        _zones[a.sector] = (_zones[a.sector] ?? 0) + step;
+      }
+      _lastTimer = a.seconds;
       _lastBrushMs = atMs;
       _mode = a.mode;
       if (a.highPressure && !_red) _warnings++;
@@ -183,6 +208,7 @@ class BrushTracker {
       seconds: _seconds,
       pressureWarnings: _warnings,
       mode: _mode,
+      zones: _zones,
     );
     _startSec = null;
     return s.seconds >= kMinBrushSeconds ? s : null;
@@ -283,6 +309,29 @@ class BrushStats {
 
   /// Average length over the last 7 days; null with no session in them.
   late final int? avgSeconds;
+}
+
+/// How long the timer ran in each zone on average, over the sessions of the
+/// last [days] that carry zones. Null when none do. A zone a session never
+/// reached counts as 0 for it: stopping early is exactly what this shows.
+({int sessions, int zones, Map<int, double> avg})? zoneTrend(
+    List<BrushSession> all, DateTime now, {int days = 30}) {
+  final cutoff = DateTime(now.year, now.month, now.day - days + 1);
+  final with_ = [
+    for (final s in all)
+      if (s.zones.isNotEmpty && !s.start.isBefore(cutoff)) s,
+  ];
+  if (with_.isEmpty) return null;
+  final most = with_.expand((s) => s.zones.keys).reduce((a, b) => a > b ? a : b);
+  final zones = most > 4 ? 6 : 4;
+  return (
+    sessions: with_.length,
+    zones: zones,
+    avg: {
+      for (var z = 1; z <= zones; z++)
+        z: with_.fold<int>(0, (a, s) => a + (s.zones[z] ?? 0)) / with_.length,
+    },
+  );
 }
 
 /// "2:05".
