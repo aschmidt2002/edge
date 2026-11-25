@@ -58,6 +58,26 @@ void main() {
     expect(t.open, isFalse);
   });
 
+  test('tracker: timer seconds land on the zone they ran in, and survive json', () {
+    final t = BrushTracker();
+    OralBAdvert z(int sec, int zone) => OralBAdvert(
+        modelId: 49, state: 3, highPressure: false, seconds: sec, mode: 0, sector: zone);
+    t.feed(z(0, 1), 0);
+    for (var s = 1; s <= 40; s++) {
+      t.feed(z(s, s <= 30 ? 1 : 2), s * 1000);
+    }
+    t.feed(z(55, 2), 55000); // a 15 s gap is not guessed onto a zone
+    final s = t.flush(120000)!;
+    expect(s.zones, {1: 30, 2: 10});
+    expect(BrushSession.fromJson(s.toJson())!.zones, {1: 30, 2: 10});
+    final tr = zoneTrend([
+      s,
+      BrushSession(startSec: s.startSec + 3600, seconds: 120, zones: const {1: 30, 2: 30, 3: 30, 4: 30}),
+    ], s.start)!;
+    expect(tr.zones, 4);
+    expect(tr.avg, {1: 30.0, 2: 20.0, 3: 15.0, 4: 15.0});
+  });
+
   test('tracker: a timer that restarts is a new session; taps are dropped', () {
     final t = BrushTracker();
     t.feed(_ad(3, 90), 0);
