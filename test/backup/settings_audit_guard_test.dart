@@ -13,6 +13,8 @@ import 'backup_support.dart';
 // must not silently change the expected export. Add new settings here by hand.
 const _mustTravel = {
   'edgeplus.training_plans', // Edge+
+  'edgeplus.run_coach.v1', 'edgeplus.planned_routes.v1', // Edge+
+  'edgeplus.route_planner_net', 'edgeplus.run_km_buzz', // Edge+
   'edgeplus.meal_plan.v1', 'edgeplus.shopping_checked.v1', // Edge+
   'edgeplus.custom_recipes.v1', // Edge+
   'edgeplus.oralb.device', 'edgeplus.oralb.name', // Edge+

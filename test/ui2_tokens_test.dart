@@ -76,7 +76,10 @@ final _rules = <_Rule>[
     // Edge+: the experiments do calendar math (windows of days, a 45 min work
     // mode tick), never an animation.
     // Edge+: the sleep player's skip steps and sleep timer are clock time.
+    // Edge+: the run panel's gap between band buzzes and the planner's GPS
+    // timeout are clock time.
     allow: {_tokenFile, 'lib/ui2/screens/home_screen.dart', 'lib/ui2/tab_header.dart',
+        'lib/ui2/activity/run_live_panel.dart', 'lib/ui2/screens/route_planner_screen.dart',
         'lib/ui2/experimental/xp_core.dart', 'lib/ui2/experimental/xp_features.dart',
         'lib/ui2/screens/winddown_screen.dart'},
   ),
@@ -224,6 +227,10 @@ const _notComponents = {
   'AppShell', 'Domain', 'GalleryScreen',
   // Edge+ training plans: Scaffold routes that read Prefs and the database.
   'TrainingPlansScreen', 'TrainingPlanEditor', 'TrainingPlanProgress',
+  // Edge+ running: Scaffold routes that read sessions, Prefs and the network
+  // (planner); the live panel reads AppState's route tracker and the draft.
+  'RunCoachScreen', 'RunWorkoutDetail', 'RunPlanSetup', 'RunStatsScreen',
+  'RoutePlannerScreen', 'RunLivePanel',
   // Edge+ recipes: Scaffold routes that pop a pick or read the week plan.
   'RecipePickerPage', 'RecipeDetailPage', 'ShoppingListPage',
   'RecipeEditorPage',
