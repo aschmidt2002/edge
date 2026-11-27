@@ -12,6 +12,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../oralb/oralb.dart';
 import '../../oralb/oralb_watcher.dart';
 import '../ui2.dart';
+import '../skeleton/guide_plot.dart' show GuidePlot;
 import 'metric_detail.dart' show detailScaffold;
 
 class DentalScreen extends StatelessWidget {
@@ -348,10 +349,14 @@ String zoneName(BuildContext c, int zone, int zones) {
   };
 }
 
-class _JawPainter extends CustomPainter {
+// Brushing time per zone is data, so a guide placeholder turns it into a wave.
+class _JawPainter extends CustomPainter implements GuidePlot {
   _JawPainter(this.zones, this.colour);
   final int zones;
   final Color Function(int zone) colour;
+
+  @override
+  Color get guideLineColor => colour(0);
 
   @override
   void paint(Canvas canvas, Size size) {
