@@ -356,6 +356,51 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_band_battery_info" />
         </receiver>
+        <!-- Edge+: activity, stress, coach and quick-action widgets. -->
+        <receiver
+            android:name=".ActivityWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_activity_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_activity_info" />
+        </receiver>
+        <receiver
+            android:name=".StressWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_stress_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_stress_info" />
+        </receiver>
+        <receiver
+            android:name=".CoachWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_coach_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_coach_info" />
+        </receiver>
+        <receiver
+            android:name=".QuickActionsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_quick_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_info" />
+        </receiver>
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

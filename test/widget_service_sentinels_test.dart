@@ -15,6 +15,7 @@ import 'package:openstrap_edge/compute/derivation_engine.dart'
     show kAlgoVersion;
 import 'package:openstrap_edge/data/day_label.dart';
 import 'package:openstrap_edge/data/db.dart';
+import 'package:openstrap_edge/data/local_repository.dart' show kDefaultStepGoal;
 import 'package:openstrap_edge/data/local_repository_impl.dart';
 import 'package:openstrap_edge/models/payloads.dart';
 import 'package:openstrap_edge/ui2/screens/home_screen.dart' show readinessBand;
@@ -607,6 +608,69 @@ void main() {
         expect(finalReadiness, 90);
         expect(finalCoach, 'snapshot B plan');
       }
+    });
+  });
+
+  // Edge+: the activity, stress and coach widgets.
+  group('activity, stress and coach widgets', () {
+    test('a measured day publishes steps, the goal, energy, minutes and stress',
+        () async {
+      await WidgetService.push(TodayData.fromJson({
+        'daily': {
+          'readiness': 71,
+          'steps': 8412,
+          'calories': 420.4,
+          'active_min': 46,
+        },
+        'step_goal': 10000,
+        'stress': {
+          'score': 34,
+          'calm_min': 190,
+          'balanced_min': 260,
+          'stressed_min': 40,
+        },
+        'coach': {
+          'summary': 'Recovered well.',
+          'plan': [
+            {'title': 'Zone 2 run, 40 minutes', 'body': 'Build base today.'},
+          ],
+        },
+      }));
+      expect(written['steps'], 8412);
+      expect(written['step_goal'], 10000);
+      expect(written['active_kcal'], 420);
+      expect(written['active_min'], 46);
+      expect(written['stress_score'], 34);
+      expect(written['stress_band'], 'Balanced');
+      expect(written['stress_tier'], 1);
+      expect(written['stress_calm_min'], 190);
+      expect(written['stress_balanced_min'], 260);
+      expect(written['stress_stressed_min'], 40);
+      expect(written['coach_line'], 'Zone 2 run, 40 minutes');
+      expect(written['coach_detail'], 'Build base today.');
+    });
+
+    test('a day with nothing counted publishes the -1 sentinels, never 0, and '
+        'the goal Home would draw against', () async {
+      await WidgetService.push(TodayData.fromJson({
+        'daily': {'readiness': 69},
+      }));
+      expect(written['steps'], -1);
+      expect(written['step_goal'], kDefaultStepGoal);
+      expect(written['active_kcal'], -1);
+      expect(written['active_min'], -1);
+      expect(written['stress_score'], -1);
+      expect(written['stress_tier'], -1);
+      expect(written['stress_band'], '');
+      expect(written['stress_calm_min'], -1);
+      expect(written['coach_detail'], '');
+    });
+
+    test('stress tiers keep the band cut-offs', () {
+      int tier(int s) => StressData({'score': s}).tier;
+      expect([tier(0), tier(24), tier(25), tier(49), tier(50), tier(74), tier(75)],
+          [0, 0, 1, 1, 2, 2, 3]);
+      expect(StressData({'score': 80}).band, 'High arousal');
     });
   });
 }

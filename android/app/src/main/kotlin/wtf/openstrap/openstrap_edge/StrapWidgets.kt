@@ -242,17 +242,144 @@ internal object StrapWidgets {
         color: Int,
         t: Double,
         iconRes: Int,
+        // Edge+: 0.34 left the glyph a speck inside its arc; the Lucide
+        // icons are drawn heavier now and sit a little larger.
+        iconScale: Float = 0.42f,
     ): Bitmap {
         val bmp = ringBitmap(context, sizeDp, strokeDp, trackColor, color, t)
-        val icon = ContextCompat.getDrawable(context, iconRes) ?: return bmp
+        val icon = ContextCompat.getDrawable(context, iconRes)?.mutate() ?: return bmp
         val px = bmp.width
-        val side = (px * 0.34f).toInt().coerceAtLeast(1)
+        val side = (px * iconScale).toInt().coerceAtLeast(1)
         val left = (px - side) / 2
         icon.setBounds(left, left, left + side, left + side)
         icon.setTint(color)
         icon.draw(Canvas(bmp))
         return bmp
     }
+
+    // ── Edge+: shared by the activity, stress, coach and quick-action widgets ─
+
+    /** "8,412" — grouped, invariant digits (see [hm] for why ROOT). */
+    fun grouped(n: Int): String = String.format(java.util.Locale.ROOT, "%,d", n)
+
+    /**
+     * A rounded horizontal bar of [segments] (fraction, colour) laid end to
+     * end over a [track]-coloured pill. One bitmap, because RemoteViews has no
+     * weighted drawing; a fraction sum under 1 leaves the track showing.
+     */
+    fun barBitmap(
+        context: Context,
+        widthDp: Int,
+        heightDp: Int,
+        track: Int,
+        segments: List<Pair<Double, Int>>,
+    ): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val w = (widthDp * density).toInt().coerceAtLeast(1)
+        val h = (heightDp * density).toInt().coerceAtLeast(1)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val r = h / 2f
+        val clip = android.graphics.Path().apply {
+            addRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), r, r, android.graphics.Path.Direction.CW)
+        }
+        canvas.clipPath(clip)
+        paint.color = track
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), paint)
+        var x = 0f
+        for ((frac, color) in segments) {
+            val f = frac.coerceIn(0.0, 1.0).toFloat()
+            if (f <= 0f) continue
+            val end = (x + f * w).coerceAtMost(w.toFloat())
+            paint.color = color
+            canvas.drawRect(x, 0f, end, h.toFloat(), paint)
+            x = end
+        }
+        return bmp
+    }
+
+    /** The shared no-data face, themed and tappable. */
+    fun noData(context: Context, pal: Pal, line: Boolean = false): android.widget.RemoteViews =
+        android.widget.RemoteViews(
+            context.packageName,
+            if (line) R.layout.widget_nodata_line else R.layout.widget_openstrap_nodata,
+        ).apply {
+            setInt(R.id.widget_root, "setBackgroundResource", pal.bgRes)
+            setOnClickPendingIntent(R.id.widget_root, openAppIntent(context))
+            setTextColor(R.id.nodata_title, pal.ink)
+            setTextColor(R.id.nodata_body, pal.inkMuted)
+        }
+
+    /**
+     * The two-face rule the Edge+ widgets share: [tall] from [tallSize] up,
+     * the one-row face below its height. Android 12+ lets the launcher pick by
+     * live size; older launchers only report a min height, so we pick here.
+     */
+    fun tallOrLine(
+        manager: android.appwidget.AppWidgetManager,
+        id: Int,
+        tallSize: android.util.SizeF,
+        build: (line: Boolean) -> android.widget.RemoteViews,
+    ): android.widget.RemoteViews =
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            android.widget.RemoteViews(
+                linkedMapOf(
+                    tallSize to build(false),
+                    android.util.SizeF(tallSize.width, 40f) to build(true),
+                ),
+            )
+        } else {
+            val minH = manager.getAppWidgetOptions(id)
+                .getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+            build(minH in 1 until tallSize.height.toInt())
+        }
+
+    /**
+     * A quick-action chip: the [iconRes] glyph in [color] over a soft disc of
+     * the same colour, so four actions read as four colours at a glance.
+     */
+    fun chipBitmap(context: Context, sizeDp: Int, color: Int, iconRes: Int): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val px = (sizeDp * density).toInt().coerceAtLeast(1)
+        val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            alpha = 0x2E
+        }
+        canvas.drawCircle(px / 2f, px / 2f, px / 2f, paint)
+        val icon = ContextCompat.getDrawable(context, iconRes)?.mutate() ?: return bmp
+        val side = (px * 0.5f).toInt().coerceAtLeast(1)
+        val left = (px - side) / 2
+        icon.setBounds(left, left, left + side, left + side)
+        icon.setTint(color)
+        icon.draw(canvas)
+        return bmp
+    }
+
+    /** Intent extra MainActivity hands to `pending_route` (see [routeIntent]). */
+    const val EXTRA_ROUTE = "wtf.openstrap.widget_route"
+
+    /**
+     * Tap → open the app ON [route] (a lib/notify/tap_router.dart route).
+     * MainActivity copies the extra into the home_widget store's
+     * `pending_route`, the same latch the iOS App Intents use, and
+     * AppState.checkPendingSiriRoute consumes it on launch/resume. The data
+     * URI keeps each route's PendingIntent distinct — extras alone do not.
+     */
+    fun routeIntent(context: Context, route: String): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            route.hashCode(),
+            Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = android.net.Uri.parse("openstrap-widget://route$route")
+                putExtra(EXTRA_ROUTE, route)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     /** Tap anywhere on a widget → open the app. */
     fun openAppIntent(context: Context): PendingIntent =

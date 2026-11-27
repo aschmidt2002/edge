@@ -254,13 +254,20 @@ struct OpenStrapWidgetEntryView: View {
       case .accessoryCircular: AccessoryCircularView(snap: entry.snap)
       case .accessoryRectangular: AccessoryRectangularView(snap: entry.snap)
       case .accessoryInline:
-        Text(entry.snap.recovery.measured
-             ? "Recovery \(entry.snap.recovery.value)"
-             : "OpenStrap · \(entry.snap.recovery.value.lowercased())")
+        // Edge+: the whole trio in the one line the lock screen gives —
+        // iOS's thinnest face. Only the rings that are reporting.
+        Label(inlineTrio(entry.snap), systemImage: "bolt.heart")
       default: SmallView(snap: entry.snap)
       }
     }
   }
+}
+
+/// "72 · 12.4 · 7h 17m" — recovery, strain, sleep, absent ones left out.
+private func inlineTrio(_ s: SW.Snapshot) -> String {
+  let parts = [s.recovery, s.strain, s.sleep].filter(\.measured).map(\.value)
+  return parts.isEmpty ? "OpenStrap · \(s.recovery.value.lowercased())"
+                       : parts.joined(separator: " · ")
 }
 
 struct OpenStrapWidget: Widget {

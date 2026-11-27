@@ -46,6 +46,7 @@ class MainActivity : FlutterFragmentActivity() {
         // getCachedEngineId() is consulted during super.onCreate, so the cache
         // entry must exist before it runs.
         val engine = EdgeApplication.ensureEngine(applicationContext)
+        latchWidgetRoute(intent)
         activityAttached = true
         clearPendingHeadlessBoot()
         super.onCreate(savedInstanceState)
@@ -66,6 +67,27 @@ class MainActivity : FlutterFragmentActivity() {
         // Re-arm CDM device-presence observation for an already-associated band
         // (idempotent; no-op below API 31 or when nothing is associated).
         CompanionBridge.ensureObserving(applicationContext)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        // Before super: the resume that follows is what makes Dart look.
+        latchWidgetRoute(intent)
+        super.onNewIntent(intent)
+    }
+
+    /**
+     * Edge+: a home-screen widget tap that names a screen (quick actions,
+     * activity, stress, coach — StrapWidgets.routeIntent). Copied into the
+     * home_widget store's `pending_route`, the same latch the iOS App Intents
+     * write, so AppState.checkPendingSiriRoute routes it on launch/resume with
+     * no Android-only path on the Dart side.
+     */
+    private fun latchWidgetRoute(intent: Intent?) {
+        val route = intent?.getStringExtra(StrapWidgets.EXTRA_ROUTE) ?: return
+        if (!route.startsWith("/")) return
+        es.antonborri.home_widget.HomeWidgetPlugin.getData(applicationContext)
+            .edit().putString("pending_route", route).apply()
+        intent.removeExtra(StrapWidgets.EXTRA_ROUTE)
     }
 
     override fun onStart() {

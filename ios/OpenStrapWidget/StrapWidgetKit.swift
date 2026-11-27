@@ -244,7 +244,8 @@ enum SW {
       ZStack {
         Ring(frac: r.frac, color: tint, lineWidth: line)
         Image(systemName: symbol)
-          .font(.system(size: size * 0.32, weight: .medium))
+          // Edge+: a touch larger and bolder, matching the Android dials.
+          .font(.system(size: size * 0.36, weight: .semibold))
           .foregroundStyle(tint)
       }
       .frame(width: size, height: size)
