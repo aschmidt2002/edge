@@ -59,6 +59,9 @@ import 'log_workout.dart';
 import 'metric_detail.dart' show MetricDetail;
 import 'start_card.dart';
 import 'training_plans_screen.dart' show TrainingPlansScreen;
+import 'route_planner_screen.dart' show RoutePlannerScreen;
+import 'run_coach_screen.dart' show RunCoachScreen;
+import 'run_stats_screen.dart' show RunStatsScreen;
 
 class WorkoutScreen extends StatefulWidget {
   const WorkoutScreen({super.key});
@@ -380,7 +383,20 @@ class _WorkoutScreenState extends State<WorkoutScreen> with RevisionReload {
       _ when a.gait => [
           const RunInsightsCard(),
           const SizedBox(height: S.x3),
-          doors([start]),
+          // Edge+: coach, progress and the route planner for running.
+          doors([
+            start,
+            _doorRow(c, LucideIcons.target, tr(c, 'Lauf-Coach', 'Run coach'),
+                () => Navigator.of(c).push(MaterialPageRoute<void>(
+                    builder: (_) => RunCoachScreen(weightKg: d.weightKg)))),
+            _doorRow(c, LucideIcons.chartLine,
+                tr(c, 'Laufstatistik', 'Running stats'),
+                () => Navigator.of(c).push(MaterialPageRoute<void>(
+                    builder: (_) => const RunStatsScreen()))),
+            _doorRow(c, LucideIcons.route, tr(c, 'Route planen', 'Plan a route'),
+                () => Navigator.of(c).push(MaterialPageRoute<void>(
+                    builder: (_) => RoutePlannerScreen(weightKg: d.weightKg)))),
+          ]),
         ],
       _ => [doors([start])],
     };

@@ -44,6 +44,7 @@ import '../theme.dart';
 import 'catalogue.dart';
 import 'exercise_picker.dart';
 import 'summary.dart';
+import 'run_live_panel.dart';
 
 /// What the band and the phone know right now. Read once per tick.
 ///
@@ -1101,6 +1102,9 @@ class LiveMeasured extends StatelessWidget {
           // The user's own unit system, not km hardcoded. `unitsOf` is null in
           // a golden, and the metric fallback there is what the store holds.
           ..._distanceStats(ctx, p, f, a, weightKg, elapsed),
+          // Edge+: pace now, km splits and the coach's step for runs.
+          if (a.gait && a.gps)
+            RunLivePanel(feed: f, elapsed: elapsed, color: a.color),
           const SizedBox(height: S.x8),
           LiveHeart(f),
           if (f.route.length > 1) ...[

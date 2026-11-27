@@ -144,6 +144,13 @@ so to be specific about it:
 - **No map tiles are fetched.** A route is drawn on your phone from your own
   points, against no basemap. The App does not contact a tile provider, so
   opening a route tells nobody which part of the world you are looking at.
+- **Route planner (Edge+, off until you turn it on).** Planning a run or hike
+  on a map asks public OpenStreetMap services for the area you look at: map
+  tiles (openstreetmap.org, OpenTopoMap, Waymarked Trails), BRouter
+  (brouter.de) to follow paths between the points you tap, and Overpass
+  (overpass-api.de) to list marked trails in view. Only those coordinates are
+  sent; recorded routes and health data never are. Planned routes stay on
+  your phone.
 - **The one exception is you.** If you tap Share on a workout, the image you
   are shown includes a picture of your route, and whatever you send it to
   receives it. That is your choice, you see the image before it is sent, and it
