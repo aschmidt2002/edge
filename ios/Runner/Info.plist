@@ -194,6 +194,17 @@
 	<string>OpenStrap reads a meal photo you pick from your library when you ask for a nutrition estimate. That one photo is sent only to the AI provider of your own API key (Google Gemini or Anthropic Claude).</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>widget-route</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>openstrap</string>
+			</array>
+		</dict>
+	</array>
 	<key>OpenStrapAppGroupIdentifier</key>
 	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>UIApplicationSceneManifest</key>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  Metrics widget metadata. minResizeWidth allows squeezing down to the 2×2 ring
-  grid; the provider swaps layouts by live size (12+) or min width (below).
+  Metrics widget metadata. minResizeWidth/Height allow squeezing down to a
+  single row (Edge+: widget_openstrap_line) or the 2×2 ring grid; the provider
+  swaps layouts by live size (12+) or min width/height (below).
   updatePeriodMillis only re-renders the cached snapshot (no network on Android)
   so the theme and staleness stay honest when the app hasn't run for a while.
   30 min (the platform floor), same as the sleep and overnight widgets: the
@@ -12,7 +13,7 @@
     android:minWidth="250dp"
     android:minHeight="110dp"
     android:minResizeWidth="110dp"
-    android:minResizeHeight="110dp"
+    android:minResizeHeight="40dp"
     android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"

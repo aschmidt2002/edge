@@ -25,9 +25,11 @@ import es.antonborri.home_widget.HomeWidgetProvider
  * network on this side — updatePeriodMillis only re-renders the cached snapshot
  * so the theme and the staleness rule stay honest when the app hasn't run.
  *
- * Two layouts, like the iOS families: three rows (2x2) and three columns (4x2),
- * sharing every id so there is one render path. On Android 12+ the launcher
- * picks by live size; below that we choose from the widget's min width.
+ * Four faces sharing every id so there is one render path: three rows (2x2),
+ * three columns (4x2), and — Edge+ — a single row (4x1/3x1: dial + number per
+ * ring) and a narrow single row (2x1: Recovery alone with its band). On
+ * Android 12+ the launcher picks by live size; below that we choose from the
+ * widget's min width and height.
  */
 class OpenStrapWidgetProvider : HomeWidgetProvider() {
 
@@ -56,18 +58,40 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
         prefs: SharedPreferences,
     ) {
         val views: RemoteViews = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // The launcher takes the closest size that FITS; on a tie the
+            // first entry wins, so the two-row faces come first. 90dp, not
+            // 110: some launchers report two rows a little under 110, and
+            // those must not drop to the one-row face.
             RemoteViews(
-                mapOf(
-                    SizeF(110f, 110f) to build(context, prefs, small = true),
-                    SizeF(250f, 110f) to build(context, prefs, small = false),
+                linkedMapOf(
+                    SizeF(110f, 90f) to build(context, prefs, Face.SMALL),
+                    SizeF(250f, 90f) to build(context, prefs, Face.WIDE),
+                    SizeF(180f, 40f) to build(context, prefs, Face.LINE),
+                    SizeF(110f, 40f) to build(context, prefs, Face.LINE_NARROW),
                 ),
             )
         } else {
-            val minW = manager.getAppWidgetOptions(id)
-                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-            build(context, prefs, small = minW in 1..249)
+            val opts = manager.getAppWidgetOptions(id)
+            val minW = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+            val minH = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+            val face = when {
+                minH in 1..89 -> if (minW in 1..179) Face.LINE_NARROW else Face.LINE
+                minW in 1..249 -> Face.SMALL
+                else -> Face.WIDE
+            }
+            build(context, prefs, face)
         }
         manager.updateAppWidget(id, views)
+    }
+
+    /** Which face. Same ids in every layout; only what is shown differs. */
+    private enum class Face(val layout: Int, val dialDp: Int, val strokeDp: Float) {
+        WIDE(R.layout.widget_openstrap, 44, 6f),
+        SMALL(R.layout.widget_openstrap_small, 30, 4.5f),
+        LINE(R.layout.widget_openstrap_line, 28, 3.5f),
+        LINE_NARROW(R.layout.widget_openstrap_line, 28, 3.5f);
+
+        val line: Boolean get() = this == LINE || this == LINE_NARROW
     }
 
     /** One ring's three views and the icon that goes in its dial. */
@@ -90,7 +114,7 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
             R.id.dial_sleep, R.id.cap_sleep, R.id.val_sleep, R.id.sub_sleep),
     )
 
-    private fun build(context: Context, prefs: SharedPreferences, small: Boolean): RemoteViews {
+    private fun build(context: Context, prefs: SharedPreferences, face: Face): RemoteViews {
         val w = StrapWidgets
         val pal = w.pal(prefs)
 
@@ -98,12 +122,9 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
         // so a phone that stops syncing keeps a week-old readiness on the home
         // screen looking exactly like this morning's. StrapWidgets.fresh() ages
         // `updated_at` here, on every render.
-        if (!w.fresh(prefs)) return buildNoData(context, pal)
+        if (!w.fresh(prefs)) return buildNoData(context, pal, face.line)
 
-        val layout = if (small) R.layout.widget_openstrap_small else R.layout.widget_openstrap
-        val dialDp = if (small) 30 else 44
-        val strokeDp = if (small) 4.5f else 6f
-        val views = RemoteViews(context.packageName, layout)
+        val views = RemoteViews(context.packageName, face.layout)
         views.setInt(R.id.widget_root, "setBackgroundResource", pal.bgRes)
         views.setOnClickPendingIntent(R.id.widget_root, w.openAppIntent(context))
 
@@ -113,6 +134,11 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
         var gap: Pair<String, String>? = null
 
         for (slot in slots) {
+            // The narrow row is Recovery alone: the other two slots go.
+            if (face == Face.LINE_NARROW && slot.key != "recovery") {
+                views.setViewVisibility(slotContainer(slot.key), View.GONE)
+                continue
+            }
             val r = w.ring(prefs, slot.key)
             val accent = when (slot.key) {
                 "recovery" -> w.tierColor(tier, pal)
@@ -122,16 +148,23 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
             val tint = r.color(accent, pal)
             views.setImageViewBitmap(
                 slot.dial,
-                w.dialBitmap(context, dialDp, strokeDp, pal.track, tint, r.frac, slot.iconRes),
+                w.dialBitmap(
+                    context, face.dialDp, face.strokeDp, pal.track, tint, r.frac, slot.iconRes,
+                    iconScale = if (face.line) 0.5f else 0.42f,
+                ),
             )
-            views.setTextViewText(slot.cap, slot.label)
-            views.setTextColor(slot.cap, pal.inkMuted)
+            views.setContentDescription(slot.dial, slot.label)
+            if (!face.line) {
+                views.setTextViewText(slot.cap, slot.label)
+                views.setTextColor(slot.cap, pal.inkMuted)
+            }
             // The absence takes the SENTENCE colour rather than the numeral
             // one, because it is a sentence: "No sleep" in full-weight ink
             // would read as a score.
             views.setTextViewText(slot.value, r.value)
             views.setTextColor(slot.value, if (r.measured) pal.ink else pal.ink2)
-            if (!small) {
+            if (face == Face.WIDE || (face == Face.LINE_NARROW && r.sub.isNotEmpty())) {
+                views.setViewVisibility(slot.sub, View.VISIBLE)
                 views.setTextViewText(slot.sub, r.sub)
                 views.setTextColor(slot.sub, pal.inkMuted)
             }
@@ -140,7 +173,7 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
 
         // The first ring that is missing and said why. One line is what a
         // widget can afford; the rest is one tap away in the app.
-        if (!small) {
+        if (face == Face.WIDE) {
             val g = gap
             if (g == null) {
                 views.setViewVisibility(R.id.gap_row, View.GONE)
@@ -153,12 +186,11 @@ class OpenStrapWidgetProvider : HomeWidgetProvider() {
         return views
     }
 
-    private fun buildNoData(context: Context, pal: StrapWidgets.Pal): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_openstrap_nodata)
-        views.setInt(R.id.widget_root, "setBackgroundResource", pal.bgRes)
-        views.setOnClickPendingIntent(R.id.widget_root, StrapWidgets.openAppIntent(context))
-        views.setTextColor(R.id.nodata_title, pal.ink)
-        views.setTextColor(R.id.nodata_body, pal.inkMuted)
-        return views
+    private fun slotContainer(key: String): Int = when (key) {
+        "strain" -> R.id.slot_strain
+        else -> R.id.slot_sleep
     }
+
+    private fun buildNoData(context: Context, pal: StrapWidgets.Pal, line: Boolean): RemoteViews =
+        StrapWidgets.noData(context, pal, line)
 }

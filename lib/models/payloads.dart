@@ -296,12 +296,16 @@ class StressData {
   }
 
   /// A short human label for the day's stress level.
-  String get band {
+  String get band => const ['Calm day', 'Balanced', 'Elevated', 'High arousal'][tier];
+
+  /// The same four bands as an index (0 calm … 3 high), so the home-screen
+  /// widgets colour the day without re-deriving the cut-offs natively.
+  int get tier {
     final v = score ?? 0;
-    if (v < 25) return 'Calm day';
-    if (v < 50) return 'Balanced';
-    if (v < 75) return 'Elevated';
-    return 'High arousal';
+    if (v < 25) return 0;
+    if (v < 50) return 1;
+    if (v < 75) return 2;
+    return 3;
   }
 }
 

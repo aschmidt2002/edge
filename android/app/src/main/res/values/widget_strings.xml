@@ -11,4 +11,13 @@
     <string name="widget_overnight_description">Last night\'s HRV against your own baseline, and resting heart rate.</string>
     <string name="widget_hrv_label">HRV</string>
     <string name="widget_rhr_label">RESTING HR</string>
+    <!-- Edge+ -->
+    <string name="widget_activity_label">Activity</string>
+    <string name="widget_activity_description">Today\'s steps against your goal, active energy and movement minutes.</string>
+    <string name="widget_stress_label">Stress</string>
+    <string name="widget_stress_description">Today\'s stress score and how your day split between calm and stressed.</string>
+    <string name="widget_coach_label">Coach tip</string>
+    <string name="widget_coach_description">Your recovery and what the coach suggests for today, in one line.</string>
+    <string name="widget_quick_label">Quick actions</string>
+    <string name="widget_quick_description">Start breathing, log water, set the alarm or open workouts in one tap.</string>
 </resources>

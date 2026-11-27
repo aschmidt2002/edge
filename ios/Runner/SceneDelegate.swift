@@ -11,7 +11,27 @@ class SceneDelegate: FlutterSceneDelegate {
       engine: delegate.sharedEngine, nibName: nil, bundle: nil)
     self.window = window
     window.makeKeyAndVisible()
+    // Edge+: a cold launch from a widget tap carries its URL here.
+    for ctx in connectionOptions.urlContexts { SceneDelegate.latchWidgetRoute(ctx.url) }
     super.scene(scene, willConnectTo: session, options: connectionOptions)
+  }
+
+  // Edge+: a widget tap while the app is already running.
+  override func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    for ctx in URLContexts { SceneDelegate.latchWidgetRoute(ctx.url) }
+    super.scene(scene, openURLContexts: URLContexts)
+  }
+
+  /// Edge+: home-screen widgets open `openstrap://route/<path>`
+  /// (EdgePlusWidgets.swift). The path goes into the App Group's
+  /// `pending_route` — the latch StartBreathingIntent already writes — and
+  /// AppState.checkPendingSiriRoute routes it on launch and on resume, so a
+  /// widget tap needs no Dart-side path of its own.
+  static func latchWidgetRoute(_ url: URL) {
+    guard url.scheme == "openstrap", url.host == "route" else { return }
+    let path = url.path
+    guard path.hasPrefix("/"), path.count > 1 else { return }
+    OpenStrapShared.defaults()?.set(path, forKey: "pending_route")
   }
 
   // Whenever the phone app comes to the foreground, mirror the App Group

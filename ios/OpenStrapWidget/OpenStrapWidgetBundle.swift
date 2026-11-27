@@ -15,6 +15,11 @@ struct OpenStrapWidgetBundle: WidgetBundle {
         OpenStrapSleepWidget()
         OpenStrapOvernightWidget()
         OpenStrapBatteryWidget()
+        // Edge+
+        OpenStrapActivityWidget()
+        OpenStrapStressWidget()
+        OpenStrapCoachWidget()
+        OpenStrapQuickWidget()
         OpenStrapWidgetLiveActivity()
         OpenStrapBreathingLiveActivity()
     }

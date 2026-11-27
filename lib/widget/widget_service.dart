@@ -44,6 +44,12 @@ class WidgetService {
     (_iOSName, _androidName),
     ('OpenStrapSleepWidget', 'SleepWidgetProvider'),
     ('OpenStrapOvernightWidget', 'OvernightWidgetProvider'),
+    // Edge+: three more faces on the same snapshot.
+    ('OpenStrapActivityWidget', 'ActivityWidgetProvider'),
+    ('OpenStrapStressWidget', 'StressWidgetProvider'),
+    ('OpenStrapCoachWidget', 'CoachWidgetProvider'),
+    // No snapshot data, but it wears the theme, so it re-renders with it.
+    ('OpenStrapQuickWidget', 'QuickActionsWidgetProvider'),
   ];
 
   static Future<void> _reloadSnapshotWidgets() async {
@@ -161,6 +167,18 @@ class WidgetService {
     'ring_sleep_sub',
     'ring_sleep_why',
     'ring_sleep_frac',
+    // Edge+: the activity, stress and coach widgets.
+    'steps',
+    'step_goal',
+    'active_kcal',
+    'active_min',
+    'stress_score',
+    'stress_band',
+    'stress_tier',
+    'stress_calm_min',
+    'stress_balanced_min',
+    'stress_stressed_min',
+    'coach_detail',
     // 'updated_at' deliberately absent: write-time metadata. Any genuinely
     // new data moves at least one fingerprinted value.
   ];
@@ -237,6 +255,23 @@ class WidgetService {
       final effMin = eff.isEmpty ? -1 : eff.value!.round();
       final overnightWhy = heldWhy ?? '';
       final coachLine = _coachLine(t.coach);
+      // Edge+: what the activity, stress and coach widgets read. Same -1
+      // sentinel as every other int key — a day with no step count says so
+      // instead of drawing "0 steps".
+      final stepsV = t.steps.isEmpty ? -1 : t.steps.value!.round();
+      // The goal Home's steps card draws against, default included, so the
+      // widget's arc and the phone's agree.
+      final stepGoalV = t.stepGoal ?? kDefaultStepGoal;
+      final kcalV = t.calories.isEmpty ? -1 : t.calories.value!.round();
+      final activeMinV = t.activeMin.isEmpty ? -1 : t.activeMin.value!.round();
+      final stress = t.stress;
+      final stressScore = stress?.score ?? -1;
+      final stressBand = stress == null ? '' : stress.band;
+      final stressTier = stress?.score == null ? -1 : stress!.tier;
+      final calmMin = stress == null ? -1 : stress.calmMin;
+      final balancedMin = stress == null ? -1 : stress.balancedMin;
+      final stressedMin = stress == null ? -1 : stress.stressedMin;
+      final coachDetail = _coachDetail(t.coach);
       // The day this snapshot describes leads the fingerprint — the SAME
       // field `isStale` reads. Without it, two consecutive days with
       // identical rounded metrics produce the same fingerprint, the push is
@@ -315,6 +350,17 @@ class WidgetService {
         overnightWhy,
         coachLine,
         for (final r in rings) ...[r.state, r.value, r.sub, r.why, r.frac],
+        stepsV,
+        stepGoalV,
+        kcalV,
+        activeMinV,
+        stressScore,
+        stressBand,
+        stressTier,
+        calmMin,
+        balancedMin,
+        stressedMin,
+        coachDetail,
       ];
       assert(
         fpValues.length == fingerprintKeyOrder.length,
@@ -337,6 +383,17 @@ class WidgetService {
       await setI('sleep_efficiency', effMin);
       await HomeWidget.saveWidgetData<String>('overnight_why', overnightWhy);
       await HomeWidget.saveWidgetData<String>('coach_line', coachLine);
+      await setI('steps', stepsV);
+      await setI('step_goal', stepGoalV);
+      await setI('active_kcal', kcalV);
+      await setI('active_min', activeMinV);
+      await setI('stress_score', stressScore);
+      await HomeWidget.saveWidgetData<String>('stress_band', stressBand);
+      await setI('stress_tier', stressTier);
+      await setI('stress_calm_min', calmMin);
+      await setI('stress_balanced_min', balancedMin);
+      await setI('stress_stressed_min', stressedMin);
+      await HomeWidget.saveWidgetData<String>('coach_detail', coachDetail);
       for (final r in rings) {
         await setI('ring_${r.key}_state', r.state);
         await HomeWidget.saveWidgetData<String>('ring_${r.key}_value', r.value);
@@ -391,6 +448,15 @@ class WidgetService {
         // is not one we still owe anybody either.
         'enable_tomorrow_alarm_weekday',
         'enable_tomorrow_alarm_requested_at',
+        'steps',
+        'step_goal',
+        'active_kcal',
+        'active_min',
+        'stress_score',
+        'stress_tier',
+        'stress_calm_min',
+        'stress_balanced_min',
+        'stress_stressed_min',
       ]) {
         await HomeWidget.saveWidgetData<int>(k, -1);
       }
@@ -408,6 +474,8 @@ class WidgetService {
         'readiness_band',
         'overnight_why',
         'coach_line',
+        'coach_detail',
+        'stress_band',
         'batt_name',
         // A route a Siri intent asked for before the wipe is not a route we
         // still owe anybody.
@@ -652,6 +720,16 @@ class WidgetService {
             (fallbackWhy.isNotEmpty
                 ? fallbackWhy
                 : 'Nothing recorded says why this is missing.'));
+  }
+
+  /// The sentence under [_coachLine] on the coach widget: the first plan
+  /// item's body, or the summary when the line is the strain target. Empty
+  /// rather than repeating the line.
+  static String _coachDetail(CoachData? c) {
+    if (c == null) return '';
+    if (c.plan.isNotEmpty) return c.plan.first.body;
+    final line = _coachLine(c);
+    return c.summary == line ? '' : c.summary;
   }
 
   static String _coachLine(CoachData? c) {
